@@ -1,0 +1,51 @@
+endpoint http://localhost:8000/v1  model Qwen/Qwen3-8B
+
+=========== level 3: matmul, single tile ===========
+round 0: this round 0.30  best so far 0.30  (24.7s)  [input tokens: instructions 67, reference 110, docs 514]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised AssertionError: SBUF and PSUM tensors must have at least 2 dimensions (partition-dim and free-dim) Every SBUF and PSUM tile needs two dimensions: a partition dimension first, then a free dimension. A 1-D tile is not allowed, so write nl.ndarray((rows, cols), ...) and give a length-N vector the shape (1, N) or (N, 1) depending on which axis you are 
+round 1: this round 0.30  best so far 0.30  (23.6s)  [input tokens: instructions 39, kernel 326, feedback 158]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: cannot reshape array of size 32768 into shape (1,64). This is raised inside nisa.nc_matmul, not by a reshape in your code: the destination tile `dst` you passed has shape (1, 64) and holds 64 elements, but this matmul produces 32768 elements. The product is (columns of stationary) x (columns of moving) = (64, 512). Write the PSUM destin
+round 2: this round 0.30  best so far 0.30  (24.2s)  [input tokens: instructions 39, kernel 328, feedback 259]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: shape mismatch: value array of shape (32768,) could not be broadcast to indexing result of shape (65536,). The result holds 32768 elements but the tile you wrote it into holds 65536: it is bigger than the data. This usually means an INPUT tile was reused for the result. Give the result a tile of its own with exactly the result's shape: 
+round 3: this round 1.00  best so far 1.00  (26.9s)  [input tokens: instructions 39, kernel 336, feedback 225]
+  Correct on every shape. MEMORY BOUND: 19.7 Flops/Byte against a ridge of 222, so 9% of what the engine could sustain. The engine is idle waiting for data. Find reuse -- make the same bytes do more work -- rather than tuning the arithmetic. 11.3x more reuse needed.
+  SOLVED on round 3. Correct on every shape. MEMORY BOUND: 19.7 Flops/Byte against a ridge of 222, so 9% of what the engine could sustain. The engine is idle waiting for data. Find reuse -- make the same bytes do more work -- rather than tuning the arithmetic. 11.3x more reuse needed.
+  ---------------- the kernel ----------------
+  import nki
+  import nki.isa as nisa
+  import nki.language as nl
+
+  @nki.jit
+  def nki_matmul_basic_(lhsT, rhs):
+      # Allocate output buffer in shared HBM
+      out = nl.ndarray(shape=(lhsT.shape[1], rhs.shape[1]), dtype=lhsT.dtype, buffer=nl.shared_hbm)
+      # Allocate SBUF for the result
+      psum = nl.ndarray(shape=(lhsT.shape[1], rhs.shape[1]), dtype=nl.float32, buffer=nl.psum)
+      # Allocate SBUF for the stationary (lhsT) and moving (rhs) operands
+      sbuf_stationary = nl.ndarray(shape=lhsT.shape, dtype=lhsT.dtype, buffer=nl.sbuf)
+      sbuf_moving = nl.ndarray(shape=rhs.shape, dtype=rhs.dtype, buffer=nl.sbuf)
+      # Allocate SBUF for the result tile
+      res_tile = nl.ndarray(shape=(lhsT.shape[1], rhs.shape[1]), dtype=lhsT.dtype, buffer=nl.sbuf)
+    
+      # Copy lhsT to SBUF
+      nisa.dma_copy(dst=sbuf_stationary, src=lhsT)
+      # Copy rhs to SBUF
+      nisa.dma_copy(dst=sbuf_moving, src=rhs)
+    
+      # Perform matrix multiplication into psum
+      nisa.nc_matmul(dst=psum, stationary=sbuf_stationary, moving=sbuf_moving)
+    
+      # Copy result from psum to res_tile
+      nisa.tensor_copy(dst=res_tile, src=psum)
+    
+      # Copy result from res_tile to shared HBM
+      nisa.dma_copy(dst=out, src=res_tile)
+      return out
+  -------------------------------------------
+  VERDICT: VERIFIED -- correct on all 1 test shapes in nki.simulate (CPU), no hardware hazard warnings. Not run or timed on the device.
+
+=========== summary ===========
+  level 3  reward 1.00 after 4 round(s)  SOLVED
+  solved 1/1
+
+attempts logged to line1.jsonl

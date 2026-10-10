@@ -96,6 +96,15 @@ runs, two distinct successful starting points, no hint-free control from the sam
 rep2/rep3, simulator only. The solved kernel is reported as MEMORY BOUND at 19.7 Flops/Byte against a
 ridge of 222, so it is correct but far from efficient.
 
+**Experiment 6, `--line-hint` added (appends the failing source line), level 3, three more runs:** all
+three VERIFIED 1.00, each in 4 rounds (fingerprints `a0404a32` ×2, `3be04b6f`). **This did not test
+the flag on the wall it was built for:** none of the three started from `1c024b99`, the start that
+stalled on the 1-D tile error in rep3 and experiment 6's earlier log. The two `a0404a32` runs left the
+1-D wall after one round, where the earlier `a0404a32` run (rep2) needed two; that is two runs against
+one and is not evidence. What stands: level 3 solved in 5 of 6 runs with all hints on, the one failure
+being the start the line hint was meant for. TODO: run until `1c024b99` recurs, with and without
+`--line-hint`.
+
 **The score did not move once, and the agent got further every time.** Each change removed the
 failure it targeted and exposed the next one. Reporting only the reward would say "nothing worked";
 the failure transitions say each fix worked and the next wall is now visible. This is the README's
