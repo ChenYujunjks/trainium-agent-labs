@@ -88,7 +88,9 @@ Other measured facts worth the write-up:
 
 ## Next steps, in order (it was 14:30 when this was written)
 
-1. Confirm the pod has the latest commit: `git -C /workspace log --oneline -1`.
+1. The pod is still checked out on the old branch name. Switch it once, and confirm the commit:
+   `kubectl exec seat-88 -- bash -lc 'cd /workspace && git fetch team && git checkout -B Project2 team/Project2 && git log --oneline -1'`
+   (untracked logs such as baseline.jsonl are not touched by the checkout).
 2. Level 3 now stalls on `cannot reshape array`. Print the last attempt's code and feedback from
    `exp3_shapehint.jsonl`, and improve the message for that error (in `enrich()`, or a new flag) so
    it names the exact slicing change. Re-run level 3 with `--shape-hint` plus the fix.
