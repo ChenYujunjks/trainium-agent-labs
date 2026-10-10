@@ -129,7 +129,10 @@ def grade(source, level):
             hint = shape_hint(err, args, level) if SHAPE_HINT else ""
             hint = hint or (reshape_hint(err, args, level) if RESHAPE_HINT else "")
             hint = hint or (copy_hint(err, args, level) if COPY_HINT else "")
-            failures.append((nkibench.label(case, level), hint or enrich(err)))
+            msg = hint or enrich(err)
+            if LINE_HINT:
+                msg += failing_line(e, source, path)
+            failures.append((nkibench.label(case, level), msg))
             continue
         parts["runs"] = True
         m = (nkibench.check_inputs_untouched(before, args)
@@ -270,6 +273,7 @@ _INVENTED = re.compile(r"has no attribute|is not callable|unexpected keyword arg
 SHAPE_HINT = False
 RESHAPE_HINT = False
 COPY_HINT = False
+LINE_HINT = False
 
 
 # --reshape-hint. Measured in exp3: level 3 ended on `cannot reshape array of size 32768 into shape
@@ -332,6 +336,23 @@ def copy_hint(err, args, level):
             f"`nisa.tensor_copy(dst=res_tile, src=<the psum tile>)`, then "
             f"`nisa.dma_copy(dst=<the shared_hbm output>, src=res_tile)`. Do not copy into "
             f"`{mn}`'s tile.")
+
+
+# --line-hint. Exp 6 (rep3): level 3 stalled on `SBUF and PSUM tensors must have at least 2
+# dimensions` for four rounds and the model resent byte-identical code each time. The 1-D shape came
+# from `out = nl.ndarray(shape=lhsT.shape[1:], ...)` and was only used two lines later by
+# `psum = nl.ndarray(shape=out.shape, ...)`. The message never said which line failed, so the model
+# could not find its own mistake. The traceback knows. Append the failing line of the candidate.
+
+def failing_line(exc, source, path):
+    """'Line N of your kernel: `...`' for the innermost traceback frame in the candidate, or ''."""
+    import traceback
+    lines = source.splitlines()
+    hit = [f for f in traceback.extract_tb(exc.__traceback__) if f.filename == path]
+    if not hit or not (1 <= hit[-1].lineno <= len(lines)):
+        return ""
+    n = hit[-1].lineno
+    return f" The error is raised by line {n} of your kernel: `{lines[n - 1].strip()}`."
 
 
 def shape_hint(err, args, level):
@@ -803,7 +824,7 @@ def solve(a, level, log, run=0):
                                   ap_example=a.ap_example, repair_card=a.repair_card,
                                   shape_hint=a.shape_hint,
                                   reshape_hint=a.reshape_hint,
-                                  copy_hint=a.copy_hint)) + "\n")
+                                  copy_hint=a.copy_hint, line_hint=a.line_hint)) + "\n")
         log.flush()
         return reward, rounds
 
@@ -949,8 +970,12 @@ def main():
     ap.add_argument("--copy-hint", action="store_true",
                     help="EXPERIMENT. When a result is copied into a tile bigger than the data, "
                          "say an input tile was reused and give the result a tile of its own.")
+    ap.add_argument("--line-hint", action="store_true",
+                    help="EXPERIMENT. Append the failing source line of the kernel to any raised "
+                         "error's feedback.")
     a = ap.parse_args()
-    global SHAPE_HINT, RESHAPE_HINT, COPY_HINT
+    global SHAPE_HINT, RESHAPE_HINT, COPY_HINT, LINE_HINT
+    LINE_HINT = a.line_hint
     SHAPE_HINT = a.shape_hint
     RESHAPE_HINT = a.reshape_hint
     COPY_HINT = a.copy_hint
