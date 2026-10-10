@@ -1,13 +1,15 @@
 # Handoff: Bruce's Hack the Chip run (project 2, the kernel agent)
 
 You are picking up a hackathon run already in progress. Read this whole file before acting.
-The user is Bruce (NYU MSCS). He works in Chinese; answer him in Chinese. He is working solo and
-wants you to drive the terminal so he does not have to copy commands back and forth.
+The user is Bruce (NYU MSCS). He works in Chinese; answer him in Chinese. He owns project 2 alone and wants you
+to drive the terminal so he does not have to copy commands back and forth. Teammates work on
+project 1 and merge to `master`; leave `master` and their branches alone. Project 2 lives on the
+branch `Project2`.
 
 ## Where things run
 
 * **This Mac** holds a clone of the team fork, `ChenYujunjks/trainium-agent-labs`, branch
-  `bruce/instrumentation`. Edit code here, commit, push.
+  `Project2`. Edit code here, commit, push.
 * **The pod `seat-88`** (AWS EKS cluster `hack-hyd`, region `ap-south-2`) has one Trainium chip, the
   model server, and the NKI simulator. All runs happen there. Reach it only with kubectl:
 
@@ -16,7 +18,7 @@ wants you to drive the terminal so he does not have to copy commands back and fo
   ```
 
   The pod's repo is `/workspace`, with remote `team` pointing at the fork. To deploy code:
-  push from the Mac, then `kubectl exec seat-88 -- bash -lc 'cd /workspace && git pull team bruce/instrumentation'`.
+  push from the Mac, then `kubectl exec seat-88 -- bash -lc 'cd /workspace && git pull team Project2'`.
   The pod never pushes; it holds no GitHub token.
 * **AWS credentials** are temporary env vars Bruce pasted into this terminal. Never write them to a
   file, never echo them, never commit them (GitHub scans pushes; the repo is public). If kubectl says

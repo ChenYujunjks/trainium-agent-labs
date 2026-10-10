@@ -110,7 +110,7 @@ it did not have.
 
 ```bash
 git clone https://github.com/ChenYujunjks/trainium-agent-labs && cd trainium-agent-labs
-git checkout bruce/instrumentation && cd projects/02-kernel-agent
+git checkout Project2 && cd projects/02-kernel-agent
 python agent.py --all --rounds 8 --samples 1 --context 8192 --log baseline.jsonl     # baseline
 python agent.py --level 1 --rounds 8 --samples 1 --context 8192 --api-card level --log exp1.jsonl
 python analyze.py baseline.jsonl exp1.jsonl --out report
