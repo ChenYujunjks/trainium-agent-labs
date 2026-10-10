@@ -93,10 +93,10 @@ Other measured facts worth the write-up:
 3. Level 1 under `--api-card level` stalls on out_of_bounds; do the same for that message.
 4. Around 15:15: one full run of all four levels with every flag that helped, `--samples 1`,
    log `final.jsonl`. Compare with `python analyze.py baseline.jsonl final.jsonl --out report`.
-5. Write the one-page note (NOTE.md): what ran, on what, how many runs (and why one suffices:
-   determinism, with the evidence), the failure transitions table, the token budget finding, the
-   calibration result (every verdict matched the checker), and honest limits: simulator only, never
-   timed on the device; `--api-card level` both removes matmul text and shortens the prompt, so the
-   two causes are confounded.
+5. Finish the one-page note. **A draft already exists: `projects/02-kernel-agent/NOTE.md`** — it
+   holds every finding above, written up for the judges. Do not start a new one. Fill each `TODO`
+   with measured numbers only (final run row, verdict count, the level 2-4 sample-identity check,
+   the level-2 kernel), and add any new experiment as a row in its experiments table. Keep its
+   rule: no claim the logs do not show. Update the "Results so far" table here too.
 6. Hand-in, per README Part 4: the checker and its reasoning, the attempt logs, the one-page note.
    Copy logs to the Mac with `kubectl cp` into `runs/bruce/`, commit, push.
