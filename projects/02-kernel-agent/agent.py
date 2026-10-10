@@ -354,6 +354,23 @@ def enrich(error_text):
                 "functions. Do not call them. Allocate with "
                 "nl.ndarray(shape, dtype=nl.float32, buffer=nl.sbuf) and pass the region as the "
                 "buffer= argument.")
+    # Added after our experiment 2: once the model stopped inventing names it reached the right
+    # call, nisa.tensor_scalar, and left arguments out. The raw TypeError named the missing argument
+    # but not the call's shape, so it fixed one and dropped another (operand0, then data).
+    m = re.search(r"(\w+)\(\) missing \d+ required (?:positional|keyword-only) arguments?: (.+)",
+                  error_text)
+    if m:
+        sig = real_signature(m.group(1))
+        return (error_text + f" Supply every required argument, by keyword."
+                + (f" The real signature is {sig}." if sig else "")
+                + (" For scaling a tile by a constant: nisa.tensor_scalar(dst=out_tile, "
+                   "data=in_tile, op0=nl.multiply, operand0=0.25)."
+                   if m.group(1) == "tensor_scalar" else ""))
+    # Also from experiment 2: a PSUM tile copied straight to the HBM output.
+    if re.search(r"dma_copy requires HBM or SBUF tensors, got src=MemoryRegion\.psum", error_text):
+        return (error_text + " nisa.dma_copy cannot read PSUM. Copy the PSUM tile into an SBUF tile "
+                "of the same shape with nisa.tensor_copy(dst=sbuf_tile, src=psum_tile) first, then "
+                "nisa.dma_copy(dst=<the shared_hbm output>, src=sbuf_tile).")
     m = re.search(r"(\w+)\(\) got an unexpected keyword argument '(\w+)'", error_text)
     if m:
         sig = real_signature(m.group(1))
