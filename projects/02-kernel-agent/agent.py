@@ -204,6 +204,57 @@ def copy_kernel(a):
 """
 
 
+# ---------------------------------------------------------------- experiment: what the docs say
+#
+# Measured in our baseline (Qwen3-8B, seat pod, greedy server): on level 1 -- average pooling, which
+# needs no matmul -- the model wrote nc_matmul calls round after round. The API card is the same for
+# every level, and its longest paragraph is the nc_matmul memory rules. Hypothesis: the card tells
+# the model what kind of kernel to write. These flags test that, one change each, all OFF by
+# default so the baseline prompt is untouched.
+
+_MATMUL_LINE = "  nisa.nc_matmul(dst=, stationary=, moving=)   matmul into a PSUM tile\n"
+_MATMUL_PARA = API_CARD[API_CARD.index("nisa.nc_matmul has strict memory rules"):
+                        API_CARD.index("Slice tiles with ranges")]
+_MATMUL_LIMIT = (f" For matmul, the stationary free dimension is at most "
+                 f"{nkibench.GEMM_STATIONARY_FMAX} and the moving free dimension at most "
+                 f"{nkibench.GEMM_MOVING_FMAX}.")
+
+
+def uses_matmul(level):
+    return nkibench.LEVELS[level]["ref"] in (nkibench.ref_matmul, nkibench.ref_attention)
+
+
+def level_card(level):
+    """--api-card level: the API card without the matmul material on levels that need no matmul."""
+    if uses_matmul(level):
+        return API_CARD
+    return API_CARD.replace(_MATMUL_LINE, "").replace(_MATMUL_PARA, "")
+
+
+# --ap-example: the strided view is the one idiom level 1 needs and the card names it in a single
+# line. This is a GENERIC example (pairs along one free axis), not the pooling kernel.
+AP_EXAMPLE = """A strided view groups elements so one nl.sum reduces them. For a tile t of shape (P, F),
+summing each adjacent pair along the free axis:
+    v = t.ap([[F, P], [2, F // 2], [1, 2]])      # [stride, count] per axis -> shape (P, F//2, 2)
+    s = nl.sum(v, axis=[2])                      # shape (P, F//2)
+The first [stride, count] pair is always the partition axis. Strides count elements of t.
+"""
+
+# --repair-card: repair prompts carry no API card at all, and our baseline showed the model
+# inventing names (nisa.multiply) in repair rounds. When the latest failure is an invented name,
+# send this short list of what is real alongside the repair.
+REPAIR_CARD = """The NKI calls that exist, for reference:
+  nl.ndarray(shape, dtype=..., buffer=nl.sbuf | nl.psum | nl.shared_hbm)   nl.affine_range(n)
+  nl.sum(view, axis=[...])   tile.ap([[stride, count], ...])   nl.float32   nl.multiply
+  nisa.dma_copy(dst=, src=)   nisa.tensor_copy(dst=, src=)
+  nisa.tensor_scalar(dst=, data=, op0=nl.multiply, operand0=x)
+  nisa.nc_matmul(dst=psum, stationary=sbuf, moving=sbuf)
+Use only these. Anything else will not exist.
+"""
+_INVENTED = re.compile(r"has no attribute|is not callable|unexpected keyword argument|"
+                       r"no module named", re.I)
+
+
 def available_names(dotted):
     """Turn 'no attribute X' into 'here are the real ones'.
 
@@ -365,7 +416,7 @@ def join_parts(parts):
     return "".join(text for _, text in parts)
 
 
-def first_prompt(level, terse=0):
+def first_prompt(level, terse=0, card="all", ap_example=False):
     """Deliberately short, and it does NOT list the rules.
 
     Measured twice in this repo: hand a model an enumerated list of prohibitions and it audits
@@ -406,23 +457,25 @@ def first_prompt(level, terse=0):
                      f"dimension is at most {nkibench.PMAX}.\n{mm}"),
             ("instructions", "\nReply with one python code block."),
         ]
+    trim = card == "level" and not uses_matmul(level)
+    card_text = level_card(level) if card == "level" else API_CARD
+    if ap_example and not uses_matmul(level):
+        card_text = card_text + "\n" + AP_EXAMPLE
     return [
         ("instructions", f"Write an AWS Neuron NKI kernel.\n\n"
                          f"Operation: {s['op']}\n"
                          f"Entry point: a function named `{s['entry']}`, decorated with `@nki.jit`.\n"
                          f"It must compute exactly what this NumPy reference computes:\n\n"),
         ("reference", ref_src),
-        ("docs", f"\nHardware limits: a tile's partition dimension is at most {nkibench.PMAX}. For "
-                 f"matmul, the stationary free dimension is at most "
-                 f"{nkibench.GEMM_STATIONARY_FMAX} and the moving free dimension at most "
-                 f"{nkibench.GEMM_MOVING_FMAX}.\n\n"
-                 f"Import nki, nki.language as nl, and nki.isa as nisa.\n\n{API_CARD}\n\n"),
+        ("docs", f"\nHardware limits: a tile's partition dimension is at most {nkibench.PMAX}."
+                 + ("" if trim else _MATMUL_LIMIT) + "\n\n"
+                 f"Import nki, nki.language as nl, and nki.isa as nisa.\n\n{card_text}\n\n"),
         ("instructions", "Reply with ONE python code block containing the imports and the "
                          "function. No prose."),
     ]
 
 
-def repair_prompt(level, source, feedback):
+def repair_prompt(level, source, feedback, repair_card=False):
     """One named change, and the previous code. No rules list, no reference re-sent.
 
     The lesson this whole repo keeps re-learning: feeding a verifier's report back verbatim
@@ -437,7 +490,8 @@ def repair_prompt(level, source, feedback):
         ("feedback", f"{feedback}"),
         ("instructions", "\n\nChange exactly what the checker names and keep everything else "
                          "identical. Reply with ONE python code block."),
-    ]
+    ] + ([("docs", "\n\n" + REPAIR_CARD)] if repair_card and _INVENTED.search(feedback or "")
+         else [])
 
 
 CODE_BLOCK = re.compile(r"```(?:python)?\s*(.*?)```", re.S)
@@ -600,7 +654,7 @@ def verdict(level, best_reward, best_feedback, solved):
 def solve(a, level, log, run=0):
     print(f"\n=========== level {level}: {nkibench.LEVELS[level]['op']} ===========")
     terse = a.terse
-    prompt_parts = first_prompt(level, terse)
+    prompt_parts = first_prompt(level, terse, a.api_card, a.ap_example)
     best = (0.0, None, "")
     tried, streak, seen = [], 0, {}
     latest = ("", "")
@@ -611,7 +665,8 @@ def solve(a, level, log, run=0):
         log.write(json.dumps(dict(type="result", run=run, level=level, best=best[0],
                                   rounds=rounds, solved=solved, verdict=status, detail=detail,
                                   stopped=why, model=a.model, samples=a.samples,
-                                  context=a.context, terse=a.terse)) + "\n")
+                                  context=a.context, terse=a.terse, api_card=a.api_card,
+                                  ap_example=a.ap_example, repair_card=a.repair_card)) + "\n")
         log.flush()
         return reward, rounds
 
@@ -686,7 +741,7 @@ def solve(a, level, log, run=0):
             # answer. Measured: the same TypeError 19 rounds running. Changing the prompt is the
             # only thing that can change the answer, so say what has already been tried.
             ledger = "\n".join(f"- {t[:160]}" for t in dict.fromkeys(tried))
-            prompt_parts = (repair_prompt(level, latest[0], latest[1])
+            prompt_parts = (repair_prompt(level, latest[0], latest[1], a.repair_card)
                             + [("instructions", "\n\nThese approaches have already failed, so do "
                                                 "something different:\n"),
                                ("ledger", ledger)])
@@ -698,10 +753,10 @@ def solve(a, level, log, run=0):
             # 202-character prompt and, under greedy sampling, the identical non-answer six
             # rounds running. Shorten and re-ask instead.
             terse = min(terse + 1, 2)
-            prompt_parts = first_prompt(level, terse)
+            prompt_parts = first_prompt(level, terse, a.api_card, a.ap_example)
             print(f"  no code yet, so re-asking with a shorter prompt (terseness {terse})")
         else:
-            prompt_parts = repair_prompt(level, latest[0], latest[1])
+            prompt_parts = repair_prompt(level, latest[0], latest[1], a.repair_card)
     print(f"  not solved in {a.rounds} rounds; best reward {best[0]:.2f}")
     return finish(best[0], a.rounds, False, "out of rounds")
 
@@ -738,6 +793,16 @@ def main():
                     help="how to count input tokens per prompt part for the log: 'server' asks the "
                          "model server's /tokenize (exact, falls back on failure), 'estimate' is "
                          "chars/4. Only the log is affected, never the prompt.")
+    ap.add_argument("--api-card", default="all", choices=("all", "level"),
+                    help="EXPERIMENT. 'all' (default, the baseline) sends the full API card on "
+                         "every level; 'level' drops the nc_matmul material on levels that need "
+                         "no matmul (1 and 2).")
+    ap.add_argument("--ap-example", action="store_true",
+                    help="EXPERIMENT. Add a generic strided-view + nl.sum example to the card on "
+                         "non-matmul levels.")
+    ap.add_argument("--repair-card", action="store_true",
+                    help="EXPERIMENT. When the latest failure is an invented API name, include a "
+                         "short list of the real calls in the repair prompt.")
     a = ap.parse_args()
 
     if not a.offline:
