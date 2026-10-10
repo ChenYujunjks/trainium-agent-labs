@@ -1,0 +1,9 @@
+mode,L1,L2,L3,L4,total
+shape_mismatch_copy,3,0,2,0,5
+tile_1d,4,0,0,0,4
+numeric_core,0,4,0,0,4
+other_exception,0,0,0,4,4
+non_finite,0,2,0,0,2
+tile_too_big,0,0,0,2,2
+reshape_not_slice,0,0,1,0,1
+solved,0,0,1,0,1

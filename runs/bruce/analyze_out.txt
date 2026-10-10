@@ -1,0 +1,214 @@
+
+#################### baseline.jsonl ####################
+124 attempts, 2 run(s), levels [1, 2, 3, 4]
+
+1. Solve rate per level (report this, not the best run)
+-------------------------------------------------------
+  level 1: solved 0/2  best 0.30  worst 0.30  mean 0.30  all=[0.3, 0.3]  (zero spread -- a capability wall)
+  level 2: solved 0/1  best 0.30  worst 0.30  mean 0.30  all=[0.3]
+  level 3: solved 0/1  best 0.30  worst 0.30  mean 0.30  all=[0.3]
+  level 4: solved 0/1  best 0.62  worst 0.62  mean 0.62  all=[0.62]
+
+2. Failure taxonomy (every attempt, by failure mode)
+----------------------------------------------------
+  mode                 L1     L2     L3     L4      total
+  shape_mismatch_copy  16     12     15     3       46
+  invented_api         40     0      0      0       40
+  out_of_bounds        0      16     0      0       16
+  tile_too_big         0      0      0      13      13
+  wrong_buffer         8      0      0      0       8
+  tile_1d              0      0      1      0       1
+
+  Where each run ended up (the failure of its best attempt in its final round):
+    level 1: invented_api x2
+    level 2: out_of_bounds x1
+    level 3: shape_mismatch_copy x1
+    level 4: tile_too_big x1
+
+3. Input token budget per round (where the context went)
+--------------------------------------------------------
+  token counts are exact (server tokenizer)
+  level run rnd kind             instruc referen    docs  kernel feedbac  ledger   total  served  fin
+  1     0   0   first              65      98     514       0       0       0     677     688  stop
+  1     0   1   repair             39       0       0     294     190       0     523     534  stop
+  1     0   2   repair+ledger      51       0       0     294     190      56     591     601  stop
+  1     0   3   repair             39       0       0     270     128       0     437     448  stop
+  1     0   4   repair             39       0       0     270      95       0     404     415  stop
+  1     0   5   repair             39       0       0     284     146       0     469     480  stop
+  1     0   6   repair+ledger      51       0       0     283     146     224     704     714  stop
+  1     0   7   repair+ledger      51       0       0     285     146     224     706     716  stop
+  2     0   0   first              67     180     514       0       0       0     761     772  stop
+  2     0   1   repair             38       0       0     253     186       0     477     488  stop
+  2     0   2   repair             38       0       0     258     184       0     480     491  stop
+  2     0   3   repair+ledger      50       0       0     261     184     110     605     615  stop
+  2     0   4   repair             38       0       0     270      51       0     359     370  stop
+  2     0   5   repair+ledger      50       0       0     270      51     161     532     542  stop
+  2     0   6   repair+ledger      50       0       0     270      51     161     532     542  stop
+  3     0   0   first              67     110     514       0       0       0     691     702  stop
+  3     0   1   repair             39       0       0     313     192       0     544     555  stop
+  3     0   2   repair+ledger      51       0       0     313     192      58     614     624  stop
+  3     0   3   repair+ledger      51       0       0     313     192      58     614     624  stop
+  4     0   0   first              67     110     514       0       0       0     691     702  stop
+  4     0   1   repair             38       0       0     369     184       0     591     602  stop
+  4     0   2   repair+ledger      50       0       0     369     184      58     661     671  stop
+  4     0   3   repair+ledger      50       0       0     369     184      58     661     671  stop
+  1     1   0   first              65      98     514       0       0       0     677     688  stop
+  1     1   1   repair             39       0       0     294     190       0     523     534  stop
+  1     1   2   repair+ledger      51       0       0     294     190      56     591     601  stop
+  1     1   3   repair             39       0       0     270     128       0     437     448  stop
+  1     1   4   repair             39       0       0     270      95       0     404     415  stop
+  1     1   5   repair             39       0       0     284     146       0     469     480  stop
+  1     1   6   repair+ledger      51       0       0     283     146     224     704     714  stop
+  1     1   7   repair+ledger      51       0       0     285     146     224     706     716  stop
+
+  0 of 124 answers were truncated (finish=length)
+
+4. Calibration (does the agent know when it failed?)
+----------------------------------------------------
+  5 level verdicts: 0 VERIFIED, 5 NOT VERIFIED; 0 disagree with the checker  (every claim matches the checker)
+  wrote report/baseline_rates.csv
+  wrote report/baseline_taxonomy.csv
+  wrote report/baseline_tokens.csv
+  (matplotlib not installed: tokens CSV written, no PNG)
+
+#################### final1.jsonl ####################
+23 attempts, 1 run(s), levels [1, 2, 3, 4]
+
+1. Solve rate per level (report this, not the best run)
+-------------------------------------------------------
+  level 1: solved 0/1  best 0.30  worst 0.30  mean 0.30  all=[0.3]
+  level 2: solved 0/1  best 0.50  worst 0.50  mean 0.50  all=[0.5]
+  level 3: solved 1/1  best 1.00  worst 1.00  mean 1.00  all=[1.0]  rounds-to-solve [4]
+  level 4: solved 0/1  best 0.75  worst 0.75  mean 0.75  all=[0.75]
+
+2. Failure taxonomy (every attempt, by failure mode)
+----------------------------------------------------
+  mode                 L1     L2     L3     L4      total
+  shape_mismatch_copy  3      0      2      0       5
+  tile_1d              4      0      0      0       4
+  numeric_core         0      4      0      0       4
+  other_exception      0      0      0      4       4
+  non_finite           0      2      0      0       2
+  tile_too_big         0      0      0      2       2
+  reshape_not_slice    0      0      1      0       1
+  solved               0      0      1      0       1
+
+  Where each run ended up (the failure of its best attempt in its final round):
+    level 1: tile_1d x1
+    level 2: numeric_core x1
+    level 3: solved x1
+    level 4: other_exception x1
+
+3. Input token budget per round (where the context went)
+--------------------------------------------------------
+  token counts are exact (server tokenizer)
+  level run rnd kind             instruc referen    docs  kernel feedbac  ledger   total  served  fin
+  1     0   0   first              65      98     349       0       0       0     512     523  stop
+  1     0   1   repair             39       0       0     267     200       0     506     517  stop
+  1     0   2   repair             39       0       0     300     201       0     540     551  stop
+  1     0   3   repair+ledger      51       0       0     300     201     113     665     675  stop
+  1     0   4   repair             39       0       0     274     161       0     474     485  stop
+  1     0   5   repair+ledger      51       0       0     274     161     169     655     665  stop
+  1     0   6   repair+ledger      51       0       0     278     161     169     659     669  stop
+  2     0   0   first              67     180     349       0       0       0     596     607  stop
+  2     0   1   repair             38       0       0     267      65       0     370     381  stop
+  2     0   2   repair+ledger      50       0       0     267      65      63     445     455  stop
+  2     0   3   repair             38       0       0     268     117       0     423     435  stop
+  2     0   4   repair+ledger      50       0       0     268     117     133     568     579  stop
+  2     0   5   repair+ledger      50       0       0     268     117     133     568     579  stop
+  3     0   0   first              67     110     514       0       0       0     691     702  stop
+  3     0   1   repair             39       0       0     313     203       0     555     566  stop
+  3     0   2   repair             39       0       0     305     268       0     612     623  stop
+  3     0   3   repair             39       0       0     312     225       0     576     587  stop
+  4     0   0   first              67     110     514       0       0       0     691     702  stop
+  4     0   1   repair             38       0       0     369     215       0     622     633  stop
+  4     0   2   repair             38       0       0     465     181       0     684     695  stop
+  4     0   3   repair             38       0       0     521      97       0     656     667  stop
+  4     0   4   repair+ledger      50       0       0     521      97     171     839     849  stop
+  4     0   5   repair+ledger      50       0       0     521      97     171     839     849  stop
+
+  0 of 23 answers were truncated (finish=length)
+
+4. Calibration (does the agent know when it failed?)
+----------------------------------------------------
+  4 level verdicts: 1 VERIFIED, 3 NOT VERIFIED; 0 disagree with the checker  (every claim matches the checker)
+  wrote report/final1_rates.csv
+  wrote report/final1_taxonomy.csv
+  wrote report/final1_tokens.csv
+  (matplotlib not installed: tokens CSV written, no PNG)
+
+#################### final2.jsonl ####################
+22 attempts, 1 run(s), levels [1, 2, 3, 4]
+
+1. Solve rate per level (report this, not the best run)
+-------------------------------------------------------
+  level 1: solved 0/1  best 0.30  worst 0.30  mean 0.30  all=[0.3]
+  level 2: solved 0/1  best 0.50  worst 0.50  mean 0.50  all=[0.5]
+  level 3: solved 1/1  best 1.00  worst 1.00  mean 1.00  all=[1.0]  rounds-to-solve [4]
+  level 4: solved 0/1  best 0.75  worst 0.75  mean 0.75  all=[0.75]
+
+2. Failure taxonomy (every attempt, by failure mode)
+----------------------------------------------------
+  mode                 L1     L2     L3     L4      total
+  other_exception      4      0      0      4       8
+  numeric_core         0      4      0      0       4
+  shape_mismatch_copy  1      0      2      0       3
+  non_finite           0      2      0      0       2
+  tile_too_big         0      0      0      2       2
+  invented_api         1      0      0      0       1
+  reshape_not_slice    0      0      1      0       1
+  solved               0      0      1      0       1
+
+  Where each run ended up (the failure of its best attempt in its final round):
+    level 1: other_exception x1
+    level 2: numeric_core x1
+    level 3: solved x1
+    level 4: other_exception x1
+
+3. Input token budget per round (where the context went)
+--------------------------------------------------------
+  token counts are exact (server tokenizer)
+  level run rnd kind             instruc referen    docs  kernel feedbac  ledger   total  served  fin
+  1     0   0   first              65      98     349       0       0       0     512     523  stop
+  1     0   1   repair             39       0       0     235     200       0     474     485  stop
+  1     0   2   repair             39       0       0     255     111       0     405     416  stop
+  1     0   3   repair             39       0       0     256      68       0     363     374  stop
+  1     0   4   repair+ledger      51       0       0     256      68     174     549     559  stop
+  1     0   5   repair+ledger      51       0       0     256      68     174     549     559  stop
+  2     0   0   first              67     180     349       0       0       0     596     607  stop
+  2     0   1   repair             38       0       0     267      65       0     370     381  stop
+  2     0   2   repair+ledger      50       0       0     267      65      63     445     455  stop
+  2     0   3   repair             38       0       0     268     117       0     423     435  stop
+  2     0   4   repair+ledger      50       0       0     268     117     133     568     579  stop
+  2     0   5   repair+ledger      50       0       0     268     117     133     568     579  stop
+  3     0   0   first              67     110     514       0       0       0     691     702  stop
+  3     0   1   repair             39       0       0     313     203       0     555     566  stop
+  3     0   2   repair             39       0       0     305     268       0     612     623  stop
+  3     0   3   repair             39       0       0     312     225       0     576     587  stop
+  4     0   0   first              67     110     514       0       0       0     691     702  stop
+  4     0   1   repair             38       0       0     369     215       0     622     633  stop
+  4     0   2   repair             38       0       0     465     181       0     684     695  stop
+  4     0   3   repair             38       0       0     521      97       0     656     667  stop
+  4     0   4   repair+ledger      50       0       0     521      97     171     839     849  stop
+  4     0   5   repair+ledger      50       0       0     521      97     171     839     849  stop
+
+  0 of 22 answers were truncated (finish=length)
+
+4. Calibration (does the agent know when it failed?)
+----------------------------------------------------
+  4 level verdicts: 1 VERIFIED, 3 NOT VERIFIED; 0 disagree with the checker  (every claim matches the checker)
+  wrote report/final2_rates.csv
+  wrote report/final2_taxonomy.csv
+  wrote report/final2_tokens.csv
+  (matplotlib not installed: tokens CSV written, no PNG)
+
+Side by side: solve rate and mean best reward per level
+-------------------------------------------------------
+  level  baseline.jsonl          final1.jsonl            final2.jsonl            
+  1      0/2  mean 0.30          0/1  mean 0.30          0/1  mean 0.30          
+  2      0/1  mean 0.30          0/1  mean 0.50          0/1  mean 0.50          
+  3      0/1  mean 0.30          1/1  mean 1.00          1/1  mean 1.00          
+  4      0/1  mean 0.62          0/1  mean 0.75          0/1  mean 0.75          
+
+  Only compare logs made with the same --rounds/--samples/--context and model, and
+  only trust a difference on a zero-spread level, or one larger than the spread.

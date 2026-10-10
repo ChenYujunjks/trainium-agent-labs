@@ -1,0 +1,9 @@
+mode,L1,L2,L3,L4,total
+other_exception,4,0,0,4,8
+numeric_core,0,4,0,0,4
+shape_mismatch_copy,1,0,2,0,3
+non_finite,0,2,0,0,2
+tile_too_big,0,0,0,2,2
+invented_api,1,0,0,0,1
+reshape_not_slice,0,0,1,0,1
+solved,0,0,1,0,1

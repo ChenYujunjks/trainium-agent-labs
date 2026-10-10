@@ -1,0 +1,110 @@
+endpoint http://localhost:8000/v1  model Qwen/Qwen3-8B
+
+=========== level 1: average pooling 2D ===========
+round 0: this round 0.30  best so far 0.30  (20.4s)  [input tokens: instructions 65, reference 98, docs 349]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to have the same number of elements, got src=32768, dst=16384. You copied the whole input `x` (shape (32, 32, 32), 32768 elements) into a tile that holds 16384 elements. Each tensor needs its OWN tile with exactly its own shape -- never reuse one tile for two different tensors. Write `x_tile = 
+round 1: this round 0.30  best so far 0.30  (21.6s)  [input tokens: instructions 39, kernel 267, feedback 200]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to have the same number of elements, got src=32768, dst=16384. You copied the whole input `x` (shape (32, 32, 32), 32768 elements) into a tile that holds 16384 elements. Each tensor needs its OWN tile with exactly its own shape -- never reuse one tile for two different tensors. Write `x_tile = 
+round 2: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 300, feedback 201]
+  same failure 2x — adding a ledger of 2 failed attempts to break the repeat
+round 3: this round 0.30  best so far 0.30  (19.8s)  [input tokens: instructions 51, kernel 300, feedback 201, ledger 113]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: SBUF and PSUM tensors must have at least 2 dimensions (partition-dim and free-dim) Every SBUF and PSUM tile needs two dimensions: a partition dimension first, then a free dimension. A 1-D tile is not allowed, so write nl.ndarray((rows, cols), ...) and give a length-N vector the shape (1, N) or (N, 1) depending on which axis
+round 4: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 274, feedback 161]
+  same failure 2x — adding a ledger of 3 failed attempts to break the repeat
+round 5: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 274, feedback 161, ledger 169]
+  same failure 3x — adding a ledger of 3 failed attempts to break the repeat
+round 6: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 278, feedback 161, ledger 169]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: SBUF and PSUM tensors must have at 
+    2x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to ha
+    1x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to ha
+  VERDICT: NOT VERIFIED -- best reward 0.30; 0 of 4 shapes passed. Do not use this kernel.
+
+=========== level 2: 2D transpose ===========
+round 0: this round 0.50  best so far 0.50  (21.6s)  [input tokens: instructions 67, reference 180, docs 349]
+  0 of 4 shapes passed. On shape=(32, 12) as 3x4: NON-FINITE OUTPUT: 96 NaN and 0 Inf, first at (0, 3). Usually an uninitialised PSUM or SBUF tile being read before anything wrote to it.
+round 1: same failure again (0.50, best so far 0.50)  [input tokens: instructions 38, kernel 267, feedback 65]
+  same failure 2x — adding a ledger of 1 failed attempts to break the repeat
+round 2: this round 0.50  best so far 0.50  (21.6s)  [input tokens: instructions 50, kernel 267, feedback 65, ledger 63]
+  0 of 4 shapes passed. On shape=(32, 12) as 3x4: NUMERICAL MISMATCH: worst error 3.91 of the output's RMS (1.01), tolerance 0.02.
+  at index (18, 1): expected +2.3015, got -1.64739
+  98.4% of elements are outside tolerance
+  most elements are wrong, so this is the core arithmetic or the operand layout, not an edge case
+round 3: same failure again (0.50, best so far 0.50)  [input tokens: instructions 38, kernel 268, feedback 117]
+  same failure 2x — adding a ledger of 2 failed attempts to break the repeat
+round 4: same failure again (0.50, best so far 0.50)  [input tokens: instructions 50, kernel 268, feedback 117, ledger 133]
+  same failure 3x — adding a ledger of 2 failed attempts to break the repeat
+round 5: same failure again (0.50, best so far 0.50)  [input tokens: instructions 50, kernel 268, feedback 117, ledger 133]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  0 of 4 shapes passed. On shape=(32, 12) as 3x4: NUMERICAL MISMATCH: worst error 3.91 of the output's RMS (1.01
+    2x  0 of 4 shapes passed. On shape=(32, 12) as 3x4: NON-FINITE OUTPUT: 96 NaN and 0 Inf, first at (0, 3). Usually 
+  VERDICT: NOT VERIFIED -- best reward 0.50; 0 of 4 shapes passed. Do not use this kernel.
+
+=========== level 3: matmul, single tile ===========
+round 0: this round 0.30  best so far 0.30  (22.5s)  [input tokens: instructions 67, reference 110, docs 514]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised AssertionError: dma_copy requires src and dst to have the same number of elements, got src=8192, dst=65536. You copied the whole input `lhsT` (shape (128, 64), 8192 elements) into a tile that holds 65536 elements. Each tensor needs its OWN tile with exactly its own shape -- never reuse one tile for two different tensors. Write `lhsT_tile = nl.ndarr
+round 1: this round 0.30  best so far 0.30  (22.0s)  [input tokens: instructions 39, kernel 313, feedback 203]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: cannot reshape array of size 32768 into shape (128,512). This is raised inside nisa.nc_matmul, not by a reshape in your code: the destination tile `dst` you passed has shape (128, 512) and holds 65536 elements, but this matmul produces 32768 elements. The product is (columns of stationary) x (columns of moving) = (64, 512). Write the PS
+round 2: this round 0.30  best so far 0.30  (22.5s)  [input tokens: instructions 39, kernel 305, feedback 268]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: shape mismatch: value array of shape (32768,) could not be broadcast to indexing result of shape (65536,). The result holds 32768 elements but the tile you wrote it into holds 65536: it is bigger than the data. This usually means an INPUT tile was reused for the result. Give the result a tile of its own with exactly the result's shape: 
+round 3: this round 1.00  best so far 1.00  (24.6s)  [input tokens: instructions 39, kernel 312, feedback 225]
+  Correct on every shape. MEMORY BOUND: 19.7 Flops/Byte against a ridge of 222, so 9% of what the engine could sustain. The engine is idle waiting for data. Find reuse -- make the same bytes do more work -- rather than tuning the arithmetic. 11.3x more reuse needed.
+  SOLVED on round 3. Correct on every shape. MEMORY BOUND: 19.7 Flops/Byte against a ridge of 222, so 9% of what the engine could sustain. The engine is idle waiting for data. Find reuse -- make the same bytes do more work -- rather than tuning the arithmetic. 11.3x more reuse needed.
+  ---------------- the kernel ----------------
+  import nki
+  import nki.isa as nisa
+  import nki.language as nl
+
+  @nki.jit
+  def nki_matmul_basic_(lhsT, rhs):
+      # Allocate output buffer in shared HBM
+      out = nl.ndarray(shape=(lhsT.shape[1], rhs.shape[1]), dtype=lhsT.dtype, buffer=nl.shared_hbm)
+      # Allocate SBUF for input and output tiles
+      lhsT_tile = nl.ndarray(shape=lhsT.shape, dtype=lhsT.dtype, buffer=nl.sbuf)
+      rhs_tile = nl.ndarray(shape=rhs.shape, dtype=rhs.dtype, buffer=nl.sbuf)
+      psum_tile = nl.ndarray(shape=(lhsT.shape[1], rhs.shape[1]), dtype=nl.float32, buffer=nl.psum)
+      res_tile = nl.ndarray(shape=(lhsT.shape[1], rhs.shape[1]), dtype=lhsT.dtype, buffer=nl.sbuf)
+    
+      # Copy lhsT to SBUF
+      nisa.dma_copy(dst=lhsT_tile, src=lhsT)
+      # Copy rhs to SBUF
+      nisa.dma_copy(dst=rhs_tile, src=rhs)
+    
+      # Perform matrix multiplication
+      nisa.nc_matmul(dst=psum_tile, stationary=lhsT_tile, moving=rhs_tile)
+    
+      # Copy result from PSUM to result tile
+      nisa.tensor_copy(dst=res_tile, src=psum_tile)
+    
+      # Copy result from result tile to shared HBM
+      nisa.dma_copy(dst=out, src=res_tile)
+      return out
+  -------------------------------------------
+  VERDICT: VERIFIED -- correct on all 1 test shapes in nki.simulate (CPU), no hardware hazard warnings. Not run or timed on the device.
+
+=========== level 4: matmul, tiled ===========
+round 0: this round 0.62  best so far 0.62  (26.8s)  [input tokens: instructions 67, reference 110, docs 514]
+  1 of 4 shapes passed. On K=256 M=256 N=1024: raised AssertionError: dma_copy dst partition dimension 256 exceeds maximum 128 A tile may have at most 128 rows, and you asked for 256. Do not allocate one tile for the whole tensor: loop over the partition dimension in chunks of at most 128 with nl.affine_range, allocate the tile inside the loop with the chunk's own size, and copy one chunk at a time,
+round 1: this round 0.62  best so far 0.62  (33.8s)  [input tokens: instructions 38, kernel 369, feedback 215]
+  1 of 4 shapes passed. On K=256 M=256 N=1024: raised AssertionError: Matmul contraction dimension 256 exceeds pmax=128 The contraction dimension K is 256 and one nc_matmul can only contract 128. Split K into chunks of 128 and accumulate: allocate ONE psum tile OUTSIDE the K loop, call nisa.nc_matmul into that same psum tile once per chunk so the partial products add up there, and only after the loo
+round 2: this round 0.75  best so far 0.75  (37.7s)  [input tokens: instructions 38, kernel 465, feedback 181]
+  2 of 4 shapes passed. On K=256 M=256 N=1024: raised AssertionError: Matmul stationary free dimension 256 exceeds gemm_stationary_fmax=128 The error is raised by line 34 of your kernel: `nisa.nc_matmul(dst=psum, stationary=sbuf_stationary[i:i+chunk_size, :], moving=sbuf_moving[i:i+chunk_size, :])`.
+round 3: same failure again (0.75, best so far 0.75)  [input tokens: instructions 38, kernel 521, feedback 97]
+  same failure 2x — adding a ledger of 3 failed attempts to break the repeat
+round 4: same failure again (0.75, best so far 0.75)  [input tokens: instructions 50, kernel 521, feedback 97, ledger 171]
+  same failure 3x — adding a ledger of 3 failed attempts to break the repeat
+round 5: same failure again (0.75, best so far 0.75)  [input tokens: instructions 50, kernel 521, feedback 97, ledger 171]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  2 of 4 shapes passed. On K=256 M=256 N=1024: raised AssertionError: Matmul stationary free dimension 256 excee
+    1x  1 of 4 shapes passed. On K=256 M=256 N=1024: raised AssertionError: dma_copy dst partition dimension 256 excee
+    1x  1 of 4 shapes passed. On K=256 M=256 N=1024: raised AssertionError: Matmul contraction dimension 256 exceeds p
+  VERDICT: NOT VERIFIED -- best reward 0.75; 2 of 4 shapes passed. Do not use this kernel.
+
+=========== summary ===========
+  level 1  reward 0.30 after 7 round(s)
+  level 2  reward 0.50 after 6 round(s)
+  level 3  reward 1.00 after 4 round(s)  SOLVED
+  level 4  reward 0.75 after 6 round(s)
+  solved 1/4
+
+attempts logged to final1.jsonl

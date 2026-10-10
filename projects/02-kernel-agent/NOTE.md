@@ -1,6 +1,6 @@
 # The kernel agent on a greedy server: what we ran, what moved, what did not
 
-*Bruce, NYU. Hack the Chip, 10 Oct 2026. Project 2. DRAFT — final-run numbers still to fill in (marked TODO).*
+*Bruce, NYU. Hack the Chip, 10 Oct 2026. Project 2. final-run numbers filled in; the one open item is marked TODO.*
 
 ## What ran, on what
 
@@ -18,8 +18,9 @@
 The README measured Qwen3 with sampling on and warns that one run is not a result. **On our seat the
 server decodes greedily**, whatever `temperature` the request asks for. Measured:
 
-* every round's 4 samples were byte-identical (8 of 8 rounds checked, on level 1; TODO: run the
-  same check on levels 2–4 of `baseline.jsonl`);
+* a round's 4 samples were byte-identical in **27 of the 31** baseline rounds: 16 of 16 on level 1, but
+  only 5 of 7 on level 2, 3 of 4 on level 3 and 3 of 4 on level 4. So the server is *nearly* greedy, not
+  exactly; that is why we ran with `--samples 1` (the extra samples are copies in most rounds);
 * two independent level-1 runs produced byte-identical kernels in all 8 rounds.
 
 **We first concluded that one run per configuration was enough. That was wrong.** Level 3's round-0
@@ -59,7 +60,7 @@ So the question on this setup is not what to cut, it is what to put in. Repair r
 | level | best | stalls on | what the model actually did |
 |---|---|---|---|
 | 1 pooling | 0.30 | invented API names | wrote `nc_matmul` for average pooling; then `nisa.multiply`, which does not exist |
-| 2 transpose | 0.30 | out-of-bounds index | the same out-of-bounds access 4 rounds running, then stopped (TODO: quote the kernel) |
+| 2 transpose | 0.30 | out-of-bounds index | it transposed by element, `tile[i, j] = tile[j, i]`, into an `(F1, F2)` tile; the swapped index runs off the axis (`index 3 exceed dimension size of 3`) and the same access repeated until the stop rule fired |
 | 3 matmul, 1 tile | 0.30 | dma_copy size mismatch | one (128, 512) SBUF tile reused for lhsT (128, 64), rhs **and** the output |
 | 4 matmul, tiled | 0.62 | tile over 128 rows | a tile taller than 128 partitions; passes 1 of 4 shapes |
 
@@ -78,7 +79,7 @@ the baseline is reproducible and each run differs from it in exactly one way.
 | 3 | `--shape-hint` | 3 | the size-mismatch message names numbers, not the tensor, and its generic "128×512 piece" example points away from the fix | 0.30 → 0.30 | size mismatch **4 → 1**; now `cannot reshape` ×4 — the level-3 wall the README documents |
 | 4 | `--reshape-hint` | 3 | "Do not reshape" blames code the model never wrote: the error is raised inside `nc_matmul` because the PSUM destination was `(1, 64)` | 0.30 → 0.30 | `cannot reshape` **gone**. Given only the numbers `(64, 512)` the model wrote `rhs.shape[0]` and got `(64, 128)`; given the expression `(lhsT.shape[1], rhs.shape[1])` it got the shape right. Next wall: the result copied into the (128, 512) input tile, `32768 could not be broadcast to 65536` |
 | 5 | `--copy-hint` | 3 | the broadcast message talks about slices; the real fault is an input tile reused for the result | **0.30 → 1.00 in 2 of 3 runs** | see below |
-| TODO | final, all helpful flags | 1–4 | | | |
+| 10 | final: `--api-card level --line-hint --shape-hint --reshape-hint --copy-hint` | 1–4 | the individually helpful flags together | see below | see below |
 
 **Experiment 5, level 3, three runs with `--shape-hint --reshape-hint --copy-hint`:**
 
@@ -144,6 +145,24 @@ stride. Partition step 1 must equal tensor free dimension size` for six rounds, 
 1-D tile error for four. There is no evidence that `--ap-example` helps, so it is left out of the final
 configuration. The failure moved to a harder idiom, which is a transition, not progress in score.
 
+**Final configuration, all four levels, two full runs (`final1`, `final2`), `--samples 1`, 8 rounds, context 8192:**
+
+| level | baseline best | final1 | final2 | where it ends |
+|---|---|---|---|---|
+| 1 average pooling | 0.30 | 0.30 | 0.30 | 1-D tile error (`final1`, fingerprint `739f47f0`); `dma_copy`/other exception (`final2`, `cf007a29`) |
+| 2 transpose | 0.30 | **0.50** | **0.50** | the kernel now **runs**, but 98.4% of elements are wrong (`numeric_core`) instead of raising out-of-bounds |
+| 3 matmul, one tile | 0.30 | **1.00, solved in 4 rounds** | **1.00, solved in 4 rounds** | VERIFIED (simulator) |
+| 4 matmul, tiled | 0.62 | **0.75** | **0.75** | 2 of 4 shapes pass (was 1 of 4); `Matmul stationary free dimension 256 exceeds gemm_stationary_fmax=128` |
+
+Levels 2, 3 and 4 started from the same round-0 answer in both runs (`5ba97a4f`, `3be04b6f`,
+`0fbbcec9`) and produced the same reward sequence, so those three rows are two observations of one
+trajectory, not two independent confirmations; level 1 started differently in the two runs and still
+ended at 0.30 both times. `analyze.py` reports 0 of 124 baseline answers truncated, 0 of 23 and 0 of 22
+in the final runs. The final-run level-3 solve starts from a fingerprint (`3be04b6f`) that also solved
+in earlier runs. Not shown here: which flag produced the level-2 and level-4 gains. They were not run
+one at a time on those levels (`--line-hint` is the most likely contributor on both, since their
+messages carry the failing line; that is an inference, not a measurement).
+
 **The score did not move once, and the agent got further every time.** Each change removed the
 failure it targeted and exposed the next one. Reporting only the reward would say "nothing worked";
 the failure transitions say each fix worked and the next wall is now visible. This is the README's
@@ -166,7 +185,7 @@ instruction the model acts on, and three of our four changes are message changes
 
 ## Calibration
 
-Every level ends with a verdict derived only from the checker. Across all runs: TODO verdicts, 0
+Every level ends with a verdict derived only from the checker. Across the three logs `analyze.py` was run on (baseline, final1, final2): 13 verdicts, 2 `VERIFIED` (level 3 in each final run), 11 `NOT VERIFIED`, 0
 `VERIFIED` on a kernel that failed, 0 disagreements with the checker. The agent never claimed a pass
 it did not have.
 
@@ -189,4 +208,4 @@ python agent.py --level 1 --rounds 8 --samples 1 --context 8192 --api-card level
 python analyze.py baseline.jsonl exp1.jsonl --out report
 ```
 
-Attempt logs: `runs/bruce/*.jsonl` (TODO: copy from the pod).
+Attempt logs: `runs/bruce/*.jsonl` (every run behind the tables above, plus `runs/bruce/report/*.csv` and `runs/bruce/analyze_out.txt` from `analyze.py baseline.jsonl final1.jsonl final2.jsonl`).

@@ -1,0 +1,7 @@
+mode,L1,L2,L3,L4,total
+shape_mismatch_copy,16,12,15,3,46
+invented_api,40,0,0,0,40
+out_of_bounds,0,16,0,0,16
+tile_too_big,0,0,0,13,13
+wrong_buffer,8,0,0,0,8
+tile_1d,0,0,1,0,1
