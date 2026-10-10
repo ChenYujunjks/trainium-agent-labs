@@ -346,6 +346,25 @@ def enrich(error_text):
                 f"`{m.group(2)}`. Use the nl/nisa functions instead.")
     return error_text
 
+# ---------------------------------------------------------------- prompt parts
+#
+# Every prompt is built as a list of (part, text) pairs and joined only when sent. The joined text
+# is byte-identical to what the original string-building code produced, so the agent's behaviour
+# is unchanged; the parts exist so each attempt can log where its input budget went. The challenge
+# names that breakdown -- docs vs error context vs code, per attempt -- as the artifact to bring.
+#
+# Part names, chosen so they sum to the whole prompt:
+#   instructions   the task framing and the "reply with one code block" tail
+#   reference      the NumPy reference implementation
+#   docs           hardware limits, the API card, the matmul memory rules
+#   kernel         the previous kernel, sent back for repair
+#   feedback       the checker's message (after enrich)
+#   ledger         the list of approaches that already failed
+
+def join_parts(parts):
+    return "".join(text for _, text in parts)
+
+
 def first_prompt(level, terse=0):
     """Deliberately short, and it does NOT list the rules.
 
@@ -353,16 +372,22 @@ def first_prompt(level, terse=0):
     itself against each one and returns nothing, while a bigger budget only buys more thinking.
     So the rules live in the checker. Generate freely, let the checker object, then send back one
     named change.
+
+    Returns a list of (part, text) pairs; join_parts() gives the prompt.
     """
     s = nkibench.LEVELS[level]
     import inspect
+    ref_src = inspect.getsource(s['ref'])
     if terse >= 2:
         # Last resort. Measured on this endpoint: one-sentence prompts answered in 300-700
         # tokens while every structured, rule-carrying prompt spiralled.
-        return (f"Write a Python function `{s['entry']}` decorated with @nki.jit that computes "
-                f"the same thing as this, using nki.language as nl and nki.isa as nisa:\n\n"
-                f"{inspect.getsource(s['ref'])}\n"
-                f"Reply with one python code block.")
+        return [
+            ("instructions", f"Write a Python function `{s['entry']}` decorated with @nki.jit that "
+                             f"computes the same thing as this, using nki.language as nl and "
+                             f"nki.isa as nisa:\n\n"),
+            ("reference", ref_src),
+            ("instructions", "\nReply with one python code block."),
+        ]
     if terse >= 1:
         # The matmul memory rules are the substance of levels 3 and 4, and the short prompt has to
         # carry them: measured, the agent cycled between "dst must be in ['psum']" and "moving must
@@ -372,24 +397,29 @@ def first_prompt(level, terse=0):
               "into it, tensor_copy psum->sbuf, then dma_copy sbuf->the shared_hbm output you "
               "return. The left operand is already transposed, with K on the partition axis.\n"
               if level >= 3 else "")
-        return (f"Write an AWS Neuron NKI kernel: a function `{s['entry']}` decorated with "
-                f"@nki.jit that computes what this reference computes.\n\n"
-                f"{inspect.getsource(s['ref'])}\n"
-                f"Allocate with nl.ndarray(shape, dtype=..., buffer=nl.sbuf), move data with "
-                f"nisa.dma_copy(dst=, src=), loop with nl.affine_range(n). A tile's partition "
-                f"dimension is at most {nkibench.PMAX}.\n{mm}\n"
-                f"Reply with one python code block.")
-    return (
-        f"Write an AWS Neuron NKI kernel.\n\n"
-        f"Operation: {s['op']}\n"
-        f"Entry point: a function named `{s['entry']}`, decorated with `@nki.jit`.\n"
-        f"It must compute exactly what this NumPy reference computes:\n\n"
-        f"{inspect.getsource(s['ref'])}\n"
-        f"Hardware limits: a tile's partition dimension is at most {nkibench.PMAX}. For matmul, "
-        f"the stationary free dimension is at most {nkibench.GEMM_STATIONARY_FMAX} and the "
-        f"moving free dimension at most {nkibench.GEMM_MOVING_FMAX}.\n\n"
-        f"Import nki, nki.language as nl, and nki.isa as nisa.\n\n{API_CARD}\n\n"
-        f"Reply with ONE python code block containing the imports and the function. No prose.")
+        return [
+            ("instructions", f"Write an AWS Neuron NKI kernel: a function `{s['entry']}` decorated "
+                             f"with @nki.jit that computes what this reference computes.\n\n"),
+            ("reference", ref_src),
+            ("docs", f"\nAllocate with nl.ndarray(shape, dtype=..., buffer=nl.sbuf), move data with "
+                     f"nisa.dma_copy(dst=, src=), loop with nl.affine_range(n). A tile's partition "
+                     f"dimension is at most {nkibench.PMAX}.\n{mm}"),
+            ("instructions", "\nReply with one python code block."),
+        ]
+    return [
+        ("instructions", f"Write an AWS Neuron NKI kernel.\n\n"
+                         f"Operation: {s['op']}\n"
+                         f"Entry point: a function named `{s['entry']}`, decorated with `@nki.jit`.\n"
+                         f"It must compute exactly what this NumPy reference computes:\n\n"),
+        ("reference", ref_src),
+        ("docs", f"\nHardware limits: a tile's partition dimension is at most {nkibench.PMAX}. For "
+                 f"matmul, the stationary free dimension is at most "
+                 f"{nkibench.GEMM_STATIONARY_FMAX} and the moving free dimension at most "
+                 f"{nkibench.GEMM_MOVING_FMAX}.\n\n"
+                 f"Import nki, nki.language as nl, and nki.isa as nisa.\n\n{API_CARD}\n\n"),
+        ("instructions", "Reply with ONE python code block containing the imports and the "
+                         "function. No prose."),
+    ]
 
 
 def repair_prompt(level, source, feedback):
@@ -397,13 +427,17 @@ def repair_prompt(level, source, feedback):
 
     The lesson this whole repo keeps re-learning: feeding a verifier's report back verbatim
     reproduces the same mistake, because a report says what is wrong and never what to do.
+
+    Returns a list of (part, text) pairs; join_parts() gives the prompt.
     """
-    return (
-        f"This NKI kernel for {nkibench.LEVELS[level]['op']} is not right yet.\n\n"
-        f"```python\n{source}\n```\n\n"
-        f"A checker reports:\n{feedback}\n\n"
-        f"Change exactly what the checker names and keep everything else identical. Reply with "
-        f"ONE python code block.")
+    return [
+        ("instructions", f"This NKI kernel for {nkibench.LEVELS[level]['op']} is not right yet.\n\n"),
+        ("kernel", f"```python\n{source}\n```\n\n"),
+        ("instructions", "A checker reports:\n"),
+        ("feedback", f"{feedback}"),
+        ("instructions", "\n\nChange exactly what the checker names and keep everything else "
+                         "identical. Reply with ONE python code block."),
+    ]
 
 
 CODE_BLOCK = re.compile(r"```(?:python)?\s*(.*?)```", re.S)
@@ -431,7 +465,13 @@ def extract_code(text):
 # ---------------------------------------------------------------- the model
 
 def ask(a, prompt):
+    """Returns the answer text. ask_meta() returns the same call's usage numbers too."""
+    return ask_meta(a, prompt)["content"]
+
+
+def ask_meta(a, prompt):
     import httpx
+    t0 = time.perf_counter()
     # enable_thinking=False matters. Qwen3 reasons before answering, and with thinking on it
     # spent the whole budget there: the first cluster run returned "No code came back" at 54.7s
     # over and over, plus truncated fragments (invalid decimal literal, unterminated string).
@@ -466,47 +506,143 @@ def ask(a, prompt):
         print(f"    (empty answer, {len(reasoning)} chars of hidden reasoning, "
               f"finish={ch.get('finish_reason')} — shorten the prompt rather than raising the "
               f"budget)")
-    return content
+    usage = payload.get("usage") or {}
+    return dict(content=content, finish=finish, reasoning_chars=len(reasoning),
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                answer_budget=budget, seconds=round(time.perf_counter() - t0, 2))
 
 
 def ask_parallel(a, prompt, n):
     import concurrent.futures as cf
     with cf.ThreadPoolExecutor(max_workers=n) as ex:
-        return [f.result() for f in [ex.submit(ask, a, prompt) for _ in range(n)]]
+        return [f.result() for f in [ex.submit(ask_meta, a, prompt) for _ in range(n)]]
+
+
+# ---------------------------------------------------------------- token accounting
+
+_TOKENIZE_URL = None      # resolved on first use; False once the server has refused
+_TOKEN_CACHE = {}
+
+
+def count_tokens(a, text):
+    """Exact token count from the server's /tokenize endpoint, or len/4 if it has none.
+
+    vLLM serves /tokenize next to /v1, so this asks the same model's own tokenizer -- no local
+    tokenizer, no guessing. The shared gpt-oss endpoint may not expose it; one failure switches
+    to the estimate for the rest of the run, and the log records which method was used.
+    Returns (tokens, method).
+    """
+    global _TOKENIZE_URL
+    if not text:
+        return 0, "exact"
+    if text in _TOKEN_CACHE:
+        return _TOKEN_CACHE[text]
+    if _TOKENIZE_URL is None:
+        base = (a.base or "").rstrip("/")
+        _TOKENIZE_URL = (base[:-3] if base.endswith("/v1") else base) + "/tokenize" \
+            if (base and not a.offline and a.token_count == "server") else False
+    if _TOKENIZE_URL:
+        try:
+            import httpx
+            r = httpx.post(_TOKENIZE_URL, json=dict(model=a.model, prompt=text,
+                                                    add_special_tokens=False),
+                           timeout=30, verify=False)
+            r.raise_for_status()
+            got = (int(r.json()["count"]), "exact")
+            _TOKEN_CACHE[text] = got
+            return got
+        except Exception as e:
+            print(f"    (token counting: {_TOKENIZE_URL} unavailable ({type(e).__name__}); "
+                  f"falling back to chars/4 for the rest of this run)")
+            _TOKENIZE_URL = False
+    return max(1, len(text) // 4), "estimate"
+
+
+def account(a, parts):
+    """Tokens per part name, summed over repeated names. ({part: tokens}, method)."""
+    out, methods = {}, set()
+    for name, text in parts:
+        n, m = count_tokens(a, text)
+        out[name] = out.get(name, 0) + n
+        methods.add(m)
+    return out, ("exact" if methods == {"exact"} else "estimate")
 
 
 def offline_answers(level, n, rnd):
     """No model. Replays the shipped reference, preceded by a deliberately broken version, so the
     loop and the feedback path can be exercised with no endpoint. Never report a number."""
     ref = open(f"reference_level{level}.py").read()
-    if rnd == 0:
-        broken = ref.replace("@nki.jit", "", 1)
-        return [f"```python\n{broken}\n```"] * n
-    return [f"```python\n{ref}\n```"] * n
+    text = (f"```python\n{ref.replace('@nki.jit', '', 1)}\n```" if rnd == 0
+            else f"```python\n{ref}\n```")
+    return [dict(content=text, finish="offline", reasoning_chars=0, prompt_tokens=None,
+                 completion_tokens=None, answer_budget=None, seconds=0.0)] * n
 
 
 # ---------------------------------------------------------------- the loop
 
-def solve(a, level, log):
+def verdict(level, best_reward, best_feedback, solved):
+    """What the agent claims about a level, stated so it can be checked.
+
+    The scoring rubric punishes "verified" on a kernel that fails, and rewards an agent that says
+    plainly what it could not verify. So the claim is derived only from the checker's own result,
+    and it says which checker: layer 1 is the CPU simulator, never the device.
+    """
+    n = len(nkibench.LEVELS[level]["shapes"])
+    if solved:
+        return ("VERIFIED", f"correct on all {n} test shapes in nki.simulate (CPU), no hardware "
+                            f"hazard warnings. Not run or timed on the device.")
+    m = re.match(r"(\d+) of (\d+) shapes passed", best_feedback or "")
+    passed = f"{m.group(1)} of {m.group(2)} shapes passed" if m else "no shape passed"
+    return ("NOT VERIFIED", f"best reward {best_reward:.2f}; {passed}. Do not use this kernel.")
+
+
+def solve(a, level, log, run=0):
     print(f"\n=========== level {level}: {nkibench.LEVELS[level]['op']} ===========")
     terse = a.terse
-    prompt = first_prompt(level, terse)
+    prompt_parts = first_prompt(level, terse)
     best = (0.0, None, "")
     tried, streak, seen = [], 0, {}
     latest = ("", "")
+
+    def finish(reward, rounds, solved, why):
+        status, detail = verdict(level, best[0], best[2], solved)
+        print(f"  VERDICT: {status} -- {detail}")
+        log.write(json.dumps(dict(type="result", run=run, level=level, best=best[0],
+                                  rounds=rounds, solved=solved, verdict=status, detail=detail,
+                                  stopped=why, model=a.model, samples=a.samples,
+                                  context=a.context, terse=a.terse)) + "\n")
+        log.flush()
+        return reward, rounds
+
     for rnd in range(a.rounds):
         t0 = time.perf_counter()
+        prompt = join_parts(prompt_parts)
+        budget_by_part, method = account(a, prompt_parts)
+        kind = ("first" if rnd == 0 or not any(n == "kernel" for n, _ in prompt_parts)
+                else "repair+ledger" if any(n == "ledger" for n, _ in prompt_parts) else "repair")
         replies = (offline_answers(level, a.samples, rnd) if a.offline
                    else ask_parallel(a, prompt, a.samples))
         graded = []
-        for reply in replies:
+        for sample, meta in enumerate(replies):
+            reply = meta["content"] or ""
             src = extract_code(reply)
             reward, parts, feedback = grade(src, level)
             graded.append((reward, src, feedback, parts))
-            log.write(json.dumps(dict(level=level, round=rnd, reward=reward, parts=parts,
+            log.write(json.dumps(dict(type="attempt", run=run, level=level, round=rnd,
+                                      sample=sample, reward=reward, parts=parts,
+                                      prompt_kind=kind, terse=terse,
                                       prompt_chars=len(prompt), reply_chars=len(reply),
+                                      prompt_parts=budget_by_part, token_method=method,
+                                      prompt_tokens=meta["prompt_tokens"],
+                                      completion_tokens=meta["completion_tokens"],
+                                      answer_budget=meta["answer_budget"],
+                                      finish=meta["finish"],
+                                      reasoning_chars=meta["reasoning_chars"],
+                                      seconds=meta["seconds"],
                                       code=src, feedback=feedback)) + "\n")
         log.flush()
+        spent = ", ".join(f"{k} {v}" for k, v in budget_by_part.items())
         graded.sort(key=lambda g: g[0], reverse=True)
         top = graded[0]
         if top[0] > best[0]:
@@ -520,17 +656,18 @@ def solve(a, level, log):
         same = top[2] == (tried[-1] if tried else None)
         if same:
             # Collapse. Fifteen identical multi-line blocks is noise, not information.
-            print(f"round {rnd}: same failure again ({top[0]:.2f}, best so far {best[0]:.2f})")
+            print(f"round {rnd}: same failure again ({top[0]:.2f}, best so far {best[0]:.2f})"
+                  f"  [input tokens: {spent}]")
         else:
             print(f"round {rnd}: this round {top[0]:.2f}  best so far {best[0]:.2f}  "
-                  f"({time.perf_counter() - t0:.1f}s)")
+                  f"({time.perf_counter() - t0:.1f}s)  [input tokens: {spent}]")
             print(f"  {top[2][:400]}")
         if top[0] >= sum(WEIGHTS.values()) - 1e-9:
             print(f"  SOLVED on round {rnd}. {top[2]}")
             print("  ---------------- the kernel ----------------")
             print(textwrap.indent(top[1], "  "))
             print("  -------------------------------------------")
-            return top[0], rnd + 1
+            return finish(top[0], rnd + 1, True, "solved")
         seen[top[2]] = seen.get(top[2], 0) + 1
         streak = streak + 1 if same else 1
         if seen[top[2]] >= a.give_up_after:
@@ -541,7 +678,7 @@ def solve(a, level, log):
                   f"mistakes rather than converging, so more rounds will not help. Failures seen:")
             for f, n in sorted(seen.items(), key=lambda kv: -kv[1]):
                 print(f"    {n}x  {f[:110]}")
-            return best[0], rnd + 1
+            return finish(best[0], rnd + 1, False, "cycling")
         tried.append(top[2])
         repeats = streak
         if repeats >= 2 and (best[1] or "").strip():
@@ -549,9 +686,10 @@ def solve(a, level, log):
             # answer. Measured: the same TypeError 19 rounds running. Changing the prompt is the
             # only thing that can change the answer, so say what has already been tried.
             ledger = "\n".join(f"- {t[:160]}" for t in dict.fromkeys(tried))
-            prompt = (repair_prompt(level, latest[0], latest[1])
-                      + f"\n\nThese approaches have already failed, so do something different:\n"
-                        f"{ledger}")
+            prompt_parts = (repair_prompt(level, latest[0], latest[1])
+                            + [("instructions", "\n\nThese approaches have already failed, so do "
+                                                "something different:\n"),
+                               ("ledger", ledger)])
             print(f"  same failure {repeats}x — adding a ledger of {len(set(tried))} failed "
                   f"attempts to break the repeat")
             continue
@@ -560,12 +698,12 @@ def solve(a, level, log):
             # 202-character prompt and, under greedy sampling, the identical non-answer six
             # rounds running. Shorten and re-ask instead.
             terse = min(terse + 1, 2)
-            prompt = first_prompt(level, terse)
+            prompt_parts = first_prompt(level, terse)
             print(f"  no code yet, so re-asking with a shorter prompt (terseness {terse})")
         else:
-            prompt = repair_prompt(level, latest[0], latest[1])
+            prompt_parts = repair_prompt(level, latest[0], latest[1])
     print(f"  not solved in {a.rounds} rounds; best reward {best[0]:.2f}")
-    return best[0], a.rounds
+    return finish(best[0], a.rounds, False, "out of rounds")
 
 
 def main():
@@ -596,6 +734,10 @@ def main():
     ap.add_argument("--think", action="store_true",
                     help="let the model reason first; costs budget, and it ran out")
     ap.add_argument("--offline", action="store_true")
+    ap.add_argument("--token-count", default="server", choices=("server", "estimate"),
+                    help="how to count input tokens per prompt part for the log: 'server' asks the "
+                         "model server's /tokenize (exact, falls back on failure), 'estimate' is "
+                         "chars/4. Only the log is affected, never the prompt.")
     a = ap.parse_args()
 
     if not a.offline:
@@ -630,7 +772,7 @@ def main():
                 print(f"\n################ run {rep + 1} of {a.repeat} ################")
             results = []
             for level in levels:
-                results.append((level,) + solve(a, level, log))
+                results.append((level,) + solve(a, level, log, run=rep))
                 history[level].append(results[-1][1])
 
             print("\n=========== summary ===========")
