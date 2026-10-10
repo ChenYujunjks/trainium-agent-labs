@@ -125,8 +125,9 @@ def grade(source, level):
             return (sum(WEIGHTS[k] for k, v in parts.items() if v), parts,
                     f"CANNOT SIMULATE: {e}")
         except Exception as e:
-            failures.append((nkibench.label(case, level),
-                             enrich(f"raised {type(e).__name__}: {e}")))
+            err = f"raised {type(e).__name__}: {e}"
+            hint = shape_hint(err, args, level) if SHAPE_HINT else ""
+            failures.append((nkibench.label(case, level), hint or enrich(err)))
             continue
         parts["runs"] = True
         m = (nkibench.check_inputs_untouched(before, args)
@@ -253,6 +254,56 @@ Use only these. Anything else will not exist.
 """
 _INVENTED = re.compile(r"has no attribute|is not callable|unexpected keyword argument|"
                        r"no module named", re.I)
+
+
+# ---------------------------------------------------------------- experiment: name the tensor
+#
+# --shape-hint. Measured in our baseline: `dma_copy requires src and dst to have the same number of
+# elements` was the most common failure, on levels 1, 2 and 3. On level 3 the model allocated ONE
+# (128, 512) tile and copied lhsT (128, 64), then rhs, into it. The existing message only knows two
+# numbers, so it offers a generic "a 128x512 piece" example -- which points AWAY from the fix, since
+# lhsT has 64 columns. But the checker holds the actual inputs: 8192 elements is exactly lhsT. So
+# name the tensor, its shape, and the one change: give it its own tile of its own shape.
+
+SHAPE_HINT = False
+
+
+def shape_hint(err, args, level):
+    """A tensor-specific instruction for a dma_copy size mismatch, or '' to fall back to enrich()."""
+    m = re.search(r"same number of elements, got src=(\d+), dst=(\d+)", err)
+    if not m:
+        return ""
+    import inspect
+    src_n, dst_n = int(m.group(1)), int(m.group(2))
+    names = list(inspect.signature(nkibench.LEVELS[level]["ref"]).parameters)
+    tensors = [(n, a) for n, a in zip(names, args) if isinstance(a, np.ndarray)]
+    for name, a in tensors:
+        if a.size == src_n:
+            head = (f"{err}. You copied the whole input `{name}` (shape {a.shape}, {src_n} "
+                    f"elements) into a tile that holds {dst_n} elements. Each tensor needs its OWN "
+                    f"tile with exactly its own shape -- never reuse one tile for two different "
+                    f"tensors.")
+            if a.shape[0] > nkibench.PMAX:
+                rest = ", ".join(str(d) for d in a.shape[1:])
+                return (head + f" `{name}` has {a.shape[0]} rows and a tile holds at most "
+                        f"{nkibench.PMAX}, so load it in pieces: inside a loop over "
+                        f"nl.affine_range({a.shape[0]} // {nkibench.PMAX}), allocate "
+                        f"`t = nl.ndarray(({nkibench.PMAX}, {rest}), dtype={name}.dtype, "
+                        f"buffer=nl.sbuf)` and copy `nisa.dma_copy(dst=t, "
+                        f"src={name}[i*{nkibench.PMAX}:(i+1)*{nkibench.PMAX}, :])`.")
+            return (head + f" Write `{name}_tile = nl.ndarray({name}.shape, dtype={name}.dtype, "
+                    f"buffer=nl.sbuf)` and then `nisa.dma_copy(dst={name}_tile, src={name})`, and do "
+                    f"the same, separately, for every other input.")
+    try:
+        out = nkibench.LEVELS[level]["ref"](*args)
+    except Exception:
+        out = None
+    if out is not None and np.size(out) == dst_n:
+        return (f"{err}. The destination is the whole output (shape {np.shape(out)}, {dst_n} "
+                f"elements), but the tile you copied out of holds {src_n}. The tile you copy into "
+                f"the output must have the output's exact shape {np.shape(out)} -- or copy into the "
+                f"matching slice of the output instead of the whole thing.")
+    return ""
 
 
 def available_names(dotted):
@@ -666,7 +717,8 @@ def solve(a, level, log, run=0):
                                   rounds=rounds, solved=solved, verdict=status, detail=detail,
                                   stopped=why, model=a.model, samples=a.samples,
                                   context=a.context, terse=a.terse, api_card=a.api_card,
-                                  ap_example=a.ap_example, repair_card=a.repair_card)) + "\n")
+                                  ap_example=a.ap_example, repair_card=a.repair_card,
+                                  shape_hint=a.shape_hint)) + "\n")
         log.flush()
         return reward, rounds
 
@@ -803,7 +855,12 @@ def main():
     ap.add_argument("--repair-card", action="store_true",
                     help="EXPERIMENT. When the latest failure is an invented API name, include a "
                          "short list of the real calls in the repair prompt.")
+    ap.add_argument("--shape-hint", action="store_true",
+                    help="EXPERIMENT. On a dma_copy size mismatch, name the input tensor whose size "
+                         "matches and tell the model to give it its own tile of its own shape.")
     a = ap.parse_args()
+    global SHAPE_HINT
+    SHAPE_HINT = a.shape_hint
 
     if not a.offline:
         # Validate before the first request. An empty or scheme-less value produces a hostname
