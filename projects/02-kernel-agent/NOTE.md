@@ -10,7 +10,7 @@
   NumPy reference on 1–4 shapes per level. **No kernel was run or timed on the device.** Every
   `VERIFIED` below means "correct in the CPU simulator", and the agent's own verdict line says so.
 * **Agent:** the repo's `agent.py` loop (8 rounds, repair the latest attempt, failure ledger, stop
-  after 4 identical failures), plus our instrumentation and four opt-in prompt experiments.
+  after 4 identical failures), plus our instrumentation and eight opt-in prompt flags (`--api-card`, `--ap-example`, `--repair-card`, `--shape-hint`, `--reshape-hint`, `--copy-hint`, `--line-hint`).
 * **Levels:** 1 average pooling, 2 transpose, 3 single-tile matmul, 4 tiled matmul.
 
 ## How many runs, and what "deterministic" turned out to mean
@@ -171,8 +171,9 @@ the failure transitions say each fix worked and the next wall is now visible. Th
 Two messages were added to `enrich()` directly rather than behind a flag, because experiment 2 is the
 first place their errors ever occurred (the baseline log contains neither): a missing-argument
 `TypeError` now gets the call's real signature and a worked `tensor_scalar` example, and a PSUM→HBM
-`dma_copy` gets the `tensor_copy` step it skipped. On a deterministic server the baseline trajectory
-cannot reach them, so the baseline comparison stands.
+`dma_copy` gets the `tensor_copy` step it skipped. The baseline run never produced either error, so the
+baseline comparison stands for the runs we have; with a server that varies its first answer, we cannot
+rule out that another baseline start would reach them.
 
 ## The checker, and what it accepts and rejects
 
