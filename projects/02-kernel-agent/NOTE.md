@@ -135,6 +135,15 @@ for reshape/transpose to carve each pooling window out of a tile, i.e. it lacks 
 access-pattern idiom; this is the capability wall the README describes for level 1. Next candidate:
 the existing `--ap-example`.
 
+**Experiment 9, level 1, `--ap-example` added to experiment 8's flags, three runs:** no run solved
+(0.30 ×3, all stopped as cycling). The example changes the round-0 prompt, so the three starting
+points (`f623f401`, `12d65785`, `c93df708`) match none of experiment 8's (`cf007a29`) and the arms
+are **not like-for-like**. What the logs do show: the model began calling `ap()`, which it had not
+used before, so it read the example; two runs then repeated `ap() pattern has invalid partition
+stride. Partition step 1 must equal tensor free dimension size` for six rounds, and one repeated the
+1-D tile error for four. There is no evidence that `--ap-example` helps, so it is left out of the final
+configuration. The failure moved to a harder idiom, which is a transition, not progress in score.
+
 **The score did not move once, and the agent got further every time.** Each change removed the
 failure it targeted and exposed the next one. Reporting only the reward would say "nothing worked";
 the failure transitions say each fix worked and the next wall is now visible. This is the README's

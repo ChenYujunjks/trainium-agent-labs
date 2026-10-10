@@ -1,0 +1,24 @@
+endpoint http://localhost:8000/v1  model Qwen/Qwen3-8B
+
+=========== level 1: average pooling 2D ===========
+round 0: this round 0.30  best so far 0.30  (19.9s)  [input tokens: instructions 65, reference 98, docs 470]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: ap() pattern has invalid partition stride. Partition step 1 must equal tensor free dimension size 1024. Pattern: [[1, 32], [2, 16], [2, 16], [1, 2], [1, 2]], tensor shape: (32, 32, 32) The error is raised by line 16 of your kernel: `tile_view = tile.ap([[1, C], [p, H // p], [p, W // p], [1, p], [1, p]])`.
+round 1: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 258, feedback 153]
+  same failure 2x — adding a ledger of 1 failed attempts to break the repeat
+round 2: this round 0.30  best so far 0.30  (18.4s)  [input tokens: instructions 51, kernel 258, feedback 153, ledger 49]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: ap() pattern has invalid partition stride. Partition step 1 must equal tensor free dimension size 1024. Pattern: [[1, 32], [2, 32], [2, 32], [1, 2], [1, 2]], tensor shape: (32, 32, 32) The error is raised by line 16 of your kernel: `tile_view = tile.ap([[1, C], [p, H], [p, W], [1, p], [1, p]])`.
+round 3: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 254, feedback 149]
+  same failure 2x — adding a ledger of 2 failed attempts to break the repeat
+round 4: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 254, feedback 149, ledger 99]
+  same failure 3x — adding a ledger of 2 failed attempts to break the repeat
+round 5: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 254, feedback 149, ledger 99]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: ap() pattern has invalid partition 
+    2x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: ap() pattern has invalid partition 
+  VERDICT: NOT VERIFIED -- best reward 0.30; 0 of 4 shapes passed. Do not use this kernel.
+
+=========== summary ===========
+  level 1  reward 0.30 after 6 round(s)
+  solved 0/1
+
+attempts logged to l1ap1.jsonl
