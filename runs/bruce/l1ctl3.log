@@ -1,0 +1,22 @@
+endpoint http://localhost:8000/v1  model Qwen/Qwen3-8B
+
+=========== level 1: average pooling 2D ===========
+round 0: this round 0.30  best so far 0.30  (20.5s)  [input tokens: instructions 65, reference 98, docs 349]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to have the same number of elements, got src=32768, dst=16384 The tile you allocated holds 16384 elements but you copied 32768 into it. nisa.dma_copy does not slice or broadcast: allocate the destination with EXACTLY the shape of the slice you are moving. If you want a 128x512 piece of a bigger
+round 1: this round 0.30  best so far 0.30  (20.2s)  [input tokens: instructions 39, kernel 267, feedback 198]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: Out-of-bound access for tensor `unnamed` on dimension 0: index range [0, 127] exceed dimension size of 32. You indexed up to 127 on dimension 0, which is only 32 long. Tile limits are a MAXIMUM, not a target. Derive every bound from the tensor's own shape -- use min(limit, size) and let the final chunk be partial -- rather 
+round 2: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 280, feedback 153]
+  same failure 2x — adding a ledger of 2 failed attempts to break the repeat
+round 3: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 298, feedback 153, ledger 116]
+  same failure 3x — adding a ledger of 2 failed attempts to break the repeat
+round 4: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 328, feedback 153, ledger 116]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: Out-of-bound access for tensor `unn
+    1x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to ha
+  VERDICT: NOT VERIFIED -- best reward 0.30; 0 of 4 shapes passed. Do not use this kernel.
+
+=========== summary ===========
+  level 1  reward 0.30 after 5 round(s)
+  solved 0/1
+
+attempts logged to l1ctl3.jsonl

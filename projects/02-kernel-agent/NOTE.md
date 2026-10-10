@@ -105,6 +105,25 @@ one and is not evidence. What stands: level 3 solved in 5 of 6 runs with all hin
 being the start the line hint was meant for. TODO: run until `1c024b99` recurs, with and without
 `--line-hint`.
 
+**Experiment 7, level 1, `--api-card level` with and without `--line-hint`, three runs each (alternating):**
+
+| run | flags | round-0 fingerprint | rounds | ended on |
+|---|---|---|---|---|
+| l1ctl1 | card | `cf007a29` | 5, cycling | out-of-bounds (index up to 127 on a 32-long axis) ×4 |
+| l1ctl2 | card | `cf007a29` | 5, cycling | out-of-bounds ×4 |
+| l1ctl3 | card | `739f47f0` | 5, cycling | out-of-bounds ×4 |
+| l1line1 | card + line | `739f47f0` | 6, cycling | dma_copy size mismatch ×4 (out-of-bounds once) |
+| l1line2 | card + line | `cf007a29` | 8, out of rounds | dma_copy mismatch, then `Tile and source shape mismatch` |
+| l1line3 | card + line | `cf007a29` | 8, cycling | dma_copy mismatch, then `Tile and source must have the same number of elements` |
+
+All six scored 0.30; none solved. **But the out-of-bounds wall disappeared with the line hint:** the three
+controls stopped on it four rounds running, and none of the three line-hint runs did, including the
+same-fingerprint pairs (`cf007a29`: 2 controls vs 2 line-hint; `739f47f0`: 1 vs 1). In every run the
+line-hint model saw the out-of-bounds error at most once and then changed its code. The failure moved on
+to a dma_copy size mismatch — the same pattern as every earlier experiment. The error text of the new
+failures points at the line (`The error is raised by line 18 of your kernel: ...`). Limits: three
+runs per arm, simulator only, and only the fingerprint pairs are like-for-like.
+
 **The score did not move once, and the agent got further every time.** Each change removed the
 failure it targeted and exposed the next one. Reporting only the reward would say "nothing worked";
 the failure transitions say each fix worked and the next wall is now visible. This is the README's

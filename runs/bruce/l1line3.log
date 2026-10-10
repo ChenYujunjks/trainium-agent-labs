@@ -1,0 +1,30 @@
+endpoint http://localhost:8000/v1  model Qwen/Qwen3-8B
+
+=========== level 1: average pooling 2D ===========
+round 0: this round 0.30  best so far 0.30  (18.2s)  [input tokens: instructions 65, reference 98, docs 349]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to have the same number of elements, got src=32768, dst=16384 The tile you allocated holds 16384 elements but you copied 32768 into it. nisa.dma_copy does not slice or broadcast: allocate the destination with EXACTLY the shape of the slice you are moving. If you want a 128x512 piece of a bigger
+round 1: this round 0.30  best so far 0.30  (17.9s)  [input tokens: instructions 39, kernel 235, feedback 225]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: Out-of-bound access for tensor `unnamed` on dimension 0: index range [0, 127] exceed dimension size of 32. You indexed up to 127 on dimension 0, which is only 32 long. Tile limits are a MAXIMUM, not a target. Derive every bound from the tensor's own shape -- use min(limit, size) and let the final chunk be partial -- rather 
+round 2: this round 0.30  best so far 0.30  (19.1s)  [input tokens: instructions 39, kernel 248, feedback 193]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to have the same number of elements, got src=32768, dst=16384 The tile you allocated holds 16384 elements but you copied 32768 into it. nisa.dma_copy does not slice or broadcast: allocate the destination with EXACTLY the shape of the slice you are moving. If you want a 128x512 piece of a bigger
+round 3: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 264, feedback 254]
+  same failure 2x — adding a ledger of 3 failed attempts to break the repeat
+round 4: this round 0.30  best so far 0.30  (25.1s)  [input tokens: instructions 51, kernel 264, feedback 254, ledger 172]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: Tile and source must have the same number of elements The error is raised by line 15 of your kernel: `assert src_size == tile_size, "Tile and source must have the same number of elements"`.
+round 5: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 349, feedback 74]
+  same failure 2x — adding a ledger of 4 failed attempts to break the repeat
+round 6: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 349, feedback 74, ledger 225]
+  same failure 3x — adding a ledger of 4 failed attempts to break the repeat
+round 7: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 349, feedback 74, ledger 225]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: Tile and source must have the same 
+    2x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to ha
+    1x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to ha
+    1x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: Out-of-bound access for tensor `unn
+  VERDICT: NOT VERIFIED -- best reward 0.30; 0 of 4 shapes passed. Do not use this kernel.
+
+=========== summary ===========
+  level 1  reward 0.30 after 8 round(s)
+  solved 0/1
+
+attempts logged to l1line3.jsonl
