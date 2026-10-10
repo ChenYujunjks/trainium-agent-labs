@@ -13,23 +13,30 @@
   after 4 identical failures), plus our instrumentation and four opt-in prompt experiments.
 * **Levels:** 1 average pooling, 2 transpose, 3 single-tile matmul, 4 tiled matmul.
 
-## How many runs, and why one per configuration is enough here
+## How many runs, and what "deterministic" turned out to mean
 
 The README measured Qwen3 with sampling on and warns that one run is not a result. **On our seat the
 server decodes greedily**, whatever `temperature` the request asks for. Measured:
 
 * every round's 4 samples were byte-identical (8 of 8 rounds checked, on level 1; TODO: run the
   same check on levels 2–4 of `baseline.jsonl`);
-* two independent runs of level 1 produced byte-identical kernels in all 8 rounds, the same errors in
-  the same order, the same token counts per prompt part.
+* two independent level-1 runs produced byte-identical kernels in all 8 rounds.
 
-So the whole loop is deterministic: the same flags give the same trajectory, and a difference between
-two configurations can only come from the change. We therefore ran **one run per configuration** with
-`--samples 1`, and kept the 2-run baseline as the evidence for that choice.
+**We first concluded that one run per configuration was enough. That was wrong.** Level 3's round-0
+prompt is the same 2477 characters in every run, yet across 8 runs it produced **4 different answers**
+(fingerprints `233796be`, `a0404a32`, `3be04b6f`, `1c024b99`). Within one of those starting points the
+trajectory is repeatable: the three fingerprints that recurred (`3be04b6f`, `a0404a32`, `1c024b99`)
+each reproduced the same failures in the same order until the feedback text itself changed. So the
+loop is deterministic *given its first answer*, and the first answer varies from run to run. We do not
+know why (a server restart or numerical non-determinism are both candidates; not investigated).
 
-A consequence worth stating on its own: the README reports level 2 solved 4 times in 5 **with
-sampling**. Greedy, it is **0 of 1** — it settles on an out-of-bounds kernel and never leaves it.
-Same model, same harness; the solve rate on level 2 came from sampling diversity, not from the loop.
+Consequences: a single run per configuration cannot be compared with another unless their round 0
+matches. Where it does match, the comparison is clean (experiment 5 below). Otherwise we repeat: the
+final level-3 configuration was run **3 times**.
+
+The README reports level 2 solved 4 times in 5 **with sampling**. Our one greedy level-2 run is
+**0 of 1**, ending on an out-of-bounds kernel. We have not repeated it, so this shows only that the
+README's rate does not transfer to a single greedy run, not what the greedy rate is.
 
 Cost: ~50 s per round, essentially all of it generation (~0.18 s per output token, ~290 tokens per
 answer). The CPU simulation is negligible next to it.
@@ -69,7 +76,25 @@ the baseline is reproducible and each run differs from it in exactly one way.
 | 1 | `--api-card level` | 1 | the card's long `nc_matmul` paragraph tells the model a pooling kernel is a matmul | 0.30 → 0.30 | invented API **5 → 0**, wrong buffer **1 → 0**; now out-of-bounds ×4 |
 | 2 | `--repair-card` | 1 | repair prompts have no API list, so the model guesses names | 0.30 → 0.30 | invented API **5 → 2**; reached the right call, `nisa.tensor_scalar`, with arguments missing |
 | 3 | `--shape-hint` | 3 | the size-mismatch message names numbers, not the tensor, and its generic "128×512 piece" example points away from the fix | 0.30 → 0.30 | size mismatch **4 → 1**; now `cannot reshape` ×4 — the level-3 wall the README documents |
+| 4 | `--reshape-hint` | 3 | "Do not reshape" blames code the model never wrote: the error is raised inside `nc_matmul` because the PSUM destination was `(1, 64)` | 0.30 → 0.30 | `cannot reshape` **gone**. Given only the numbers `(64, 512)` the model wrote `rhs.shape[0]` and got `(64, 128)`; given the expression `(lhsT.shape[1], rhs.shape[1])` it got the shape right. Next wall: the result copied into the (128, 512) input tile, `32768 could not be broadcast to 65536` |
+| 5 | `--copy-hint` | 3 | the broadcast message talks about slices; the real fault is an input tile reused for the result | **0.30 → 1.00 in 2 of 3 runs** | see below |
 | TODO | final, all helpful flags | 1–4 | | | |
+
+**Experiment 5, level 3, three runs with `--shape-hint --reshape-hint --copy-hint`:**
+
+| run | round-0 fingerprint | result | path |
+|---|---|---|---|
+| rep1 | `3be04b6f` | **VERIFIED 1.00, round 4** | dma size mismatch → `cannot reshape (128,512)` → broadcast 65536 → correct |
+| rep2 | `a0404a32` | **VERIFIED 1.00, round 5** | 1-D tile ×2 → `cannot reshape (1,64)` → broadcast 65536 → correct |
+| rep3 | `1c024b99` | 0.30, stopped as cycling | 1-D tile error 4 rounds running; never reached the new hints |
+
+The cleanest pair: rep1 and the earlier experiment 5 run share the fingerprint `3be04b6f` and the same
+first three failures; the only difference was `--copy-hint`, and the run without it stalled on the
+broadcast error while the run with it was correct one round later. rep3's starting point also stuck
+in an earlier run (experiment 6 log), so that failure repeats rather than being noise. **Limits:** three
+runs, two distinct successful starting points, no hint-free control from the same starting point for
+rep2/rep3, simulator only. The solved kernel is reported as MEMORY BOUND at 19.7 Flops/Byte against a
+ridge of 222, so it is correct but far from efficient.
 
 **The score did not move once, and the agent got further every time.** Each change removed the
 failure it targeted and exposed the next one. Reporting only the reward would say "nothing worked";
