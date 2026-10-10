@@ -10,7 +10,7 @@
   NumPy reference on 1–4 shapes per level. **No kernel was run or timed on the device.** Every
   `VERIFIED` below means "correct in the CPU simulator", and the agent's own verdict line says so.
 * **Agent:** the repo's `agent.py` loop (8 rounds, repair the latest attempt, failure ledger, stop
-  after 4 identical failures), plus our instrumentation and eight opt-in prompt flags (`--api-card`, `--ap-example`, `--repair-card`, `--shape-hint`, `--reshape-hint`, `--copy-hint`, `--line-hint`).
+  after 4 identical failures), plus our instrumentation and seven opt-in prompt flags (`--api-card`, `--ap-example`, `--repair-card`, `--shape-hint`, `--reshape-hint`, `--copy-hint`, `--line-hint`).
 * **Levels:** 1 average pooling, 2 transpose, 3 single-tile matmul, 4 tiled matmul.
 
 ## How many runs, and what "deterministic" turned out to mean
