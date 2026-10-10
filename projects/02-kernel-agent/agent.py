@@ -282,16 +282,23 @@ def reshape_hint(err, args, level):
     if not m:
         return ""
     size, r, c = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    mats = [x for x in args if isinstance(x, np.ndarray) and x.ndim == 2]
-    if len(mats) < 2 or mats[0].shape[1] * mats[1].shape[1] != size:
+    import inspect
+    names = list(inspect.signature(nkibench.LEVELS[level]["ref"]).parameters)
+    mats = [(n, x) for n, x in zip(names, args) if isinstance(x, np.ndarray) and x.ndim == 2]
+    if len(mats) < 2 or mats[0][1].shape[1] * mats[1][1].shape[1] != size:
         return ""
-    M, N = mats[0].shape[1], mats[1].shape[1]
+    (sn, sa), (mn, ma) = mats[0], mats[1]
+    M, N = sa.shape[1], ma.shape[1]
+    shape = f"({sn}.shape[1], {mn}.shape[1])"
+    # Exp 4b: given only the numbers (64, 512), the model wrote (lhsT.shape[1], rhs.shape[0]) and
+    # got (64, 128): it indexed the wrong axis of rhs. So give the expression, and name the trap.
     return (f"{err}. This is raised inside nisa.nc_matmul, not by a reshape in your code: the "
             f"destination tile `dst` you passed has shape ({r}, {c}) and holds {r * c} elements, "
             f"but this matmul produces {size} elements. The product is (columns of stationary) x "
-            f"(columns of moving) = ({M}, {N}). Allocate the PSUM destination with exactly that "
-            f"shape: `psum = nl.ndarray(({M}, {N}), dtype=nl.float32, buffer=nl.psum)`, and give "
-            f"the SBUF copy and the shared_hbm output the same ({M}, {N}) shape.")
+            f"(columns of moving) = ({M}, {N}). Write the PSUM destination as "
+            f"`psum = nl.ndarray({shape}, dtype=nl.float32, buffer=nl.psum)`. Use index [1] on both "
+            f"inputs: `{mn}.shape[0]` is {ma.shape[0]}, the contraction length, not the {N} you "
+            f"need. Give the output tile and the shared_hbm output the same {shape} shape.")
 
 
 def shape_hint(err, args, level):
