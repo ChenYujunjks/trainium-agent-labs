@@ -1,0 +1,27 @@
+endpoint http://localhost:8000/v1  model Qwen/Qwen3-8B
+
+=========== level 3: matmul, single tile ===========
+round 0: this round 0.30  best so far 0.30  (24.7s)  [input tokens: instructions 67, reference 110, docs 514]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised AssertionError: SBUF and PSUM tensors must have at least 2 dimensions (partition-dim and free-dim) Every SBUF and PSUM tile needs two dimensions: a partition dimension first, then a free dimension. A 1-D tile is not allowed, so write nl.ndarray((rows, cols), ...) and give a length-N vector the shape (1, N) or (N, 1) depending on which axis you are 
+round 1: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 326, feedback 117]
+  same failure 2x — adding a ledger of 1 failed attempts to break the repeat
+round 2: this round 0.30  best so far 0.30  (24.7s)  [input tokens: instructions 51, kernel 341, feedback 117, ledger 54]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: cannot reshape array of size 32768 into shape (1,64). This is raised inside nisa.nc_matmul, not by a reshape in your code: the destination tile `dst` you passed has shape (1, 64) and holds 64 elements, but this matmul produces 32768 elements. The product is (columns of stationary) x (columns of moving) = (64, 512). Allocate the PSUM des
+round 3: this round 0.30  best so far 0.30  (25.3s)  [input tokens: instructions 39, kernel 343, feedback 188]
+  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: cannot reshape array of size 32768 into shape (64,128). This is raised inside nisa.nc_matmul, not by a reshape in your code: the destination tile `dst` you passed has shape (64, 128) and holds 8192 elements, but this matmul produces 32768 elements. The product is (columns of stationary) x (columns of moving) = (64, 512). Allocate the PS
+round 4: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 351, feedback 194]
+  same failure 2x — adding a ledger of 3 failed attempts to break the repeat
+round 5: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 351, feedback 194, ledger 175]
+  same failure 3x — adding a ledger of 3 failed attempts to break the repeat
+round 6: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 351, feedback 194, ledger 175]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: cannot reshape array of size 32768 into shape (6
+    2x  0 of 1 shapes passed. On K=128 M=64 N=512: raised AssertionError: SBUF and PSUM tensors must have at least 2 d
+    1x  0 of 1 shapes passed. On K=128 M=64 N=512: raised ValueError: cannot reshape array of size 32768 into shape (1
+  VERDICT: NOT VERIFIED -- best reward 0.30; 0 of 1 shapes passed. Do not use this kernel.
+
+=========== summary ===========
+  level 3  reward 0.30 after 7 round(s)
+  solved 0/1
+
+attempts logged to exp4b_reshapehint.jsonl
