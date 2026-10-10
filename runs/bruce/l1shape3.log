@@ -1,0 +1,25 @@
+endpoint http://localhost:8000/v1  model Qwen/Qwen3-8B
+
+=========== level 1: average pooling 2D ===========
+round 0: this round 0.30  best so far 0.30  (18.2s)  [input tokens: instructions 65, reference 98, docs 349]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to have the same number of elements, got src=32768, dst=16384. You copied the whole input `x` (shape (32, 32, 32), 32768 elements) into a tile that holds 16384 elements. Each tensor needs its OWN tile with exactly its own shape -- never reuse one tile for two different tensors. Write `x_tile = 
+round 1: this round 0.30  best so far 0.30  (18.4s)  [input tokens: instructions 39, kernel 235, feedback 200]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AttributeError: module 'nki.language' has no attribute 'reshape' `nki.language` has no `reshape`. The closest real names are: greater, transpose, range, shared_hbm, negative, greater_equal. Pick one of those or use a different approach. The error is raised by line 18 of your kernel: `tile_view = nl.reshape(tile_view, (p, p))`.
+round 2: this round 0.30  best so far 0.30  (18.5s)  [input tokens: instructions 39, kernel 255, feedback 111]
+  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised ValueError: Unknown dtype: (1, 0) The error is raised by line 18 of your kernel: `tile_view = nl.transpose(tile_view, (1, 0))`.
+round 3: same failure again (0.30, best so far 0.30)  [input tokens: instructions 39, kernel 256, feedback 68]
+  same failure 2x — adding a ledger of 3 failed attempts to break the repeat
+round 4: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 256, feedback 68, ledger 174]
+  same failure 3x — adding a ledger of 3 failed attempts to break the repeat
+round 5: same failure again (0.30, best so far 0.30)  [input tokens: instructions 51, kernel 256, feedback 68, ledger 174]
+  STOPPING this level: the identical failure 4 rounds running. The agent is cycling between a fixed set of mistakes rather than converging, so more rounds will not help. Failures seen:
+    4x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised ValueError: Unknown dtype: (1, 0) The error is rais
+    1x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AssertionError: dma_copy requires src and dst to ha
+    1x  0 of 4 shapes passed. On C,H,W=(32, 32, 32) pool=2: raised AttributeError: module 'nki.language' has no attrib
+  VERDICT: NOT VERIFIED -- best reward 0.30; 0 of 4 shapes passed. Do not use this kernel.
+
+=========== summary ===========
+  level 1  reward 0.30 after 6 round(s)
+  solved 0/1
+
+attempts logged to l1shape3.jsonl

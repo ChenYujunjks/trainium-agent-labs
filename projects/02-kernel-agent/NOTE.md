@@ -124,6 +124,17 @@ to a dma_copy size mismatch — the same pattern as every earlier experiment. Th
 failures points at the line (`The error is raised by line 18 of your kernel: ...`). Limits: three
 runs per arm, simulator only, and only the fingerprint pairs are like-for-like.
 
+**Experiment 8, level 1, `--shape-hint` added to experiment 7's flags (card + line), three runs:** all
+three started from `cf007a29` and were identical round for round (a case where "deterministic given
+the first answer" held exactly). All scored 0.30, stopped as cycling after 6 rounds. **The dma_copy size
+mismatch was gone after round 0 in all three**; the two same-fingerprint runs without `--shape-hint`
+(`l1line2`, `l1line3`) kept returning to it for rounds 2–5. The new wall is the same in all three:
+the model invents `nl.reshape` (round 1), then calls `nl.transpose(tile, (1, 0))`, which the
+simulator rejects as `Unknown dtype: (1, 0)`, and repeats that call for four rounds. It is reaching
+for reshape/transpose to carve each pooling window out of a tile, i.e. it lacks the strided
+access-pattern idiom; this is the capability wall the README describes for level 1. Next candidate:
+the existing `--ap-example`.
+
 **The score did not move once, and the agent got further every time.** Each change removed the
 failure it targeted and exposed the next one. Reporting only the reward would say "nothing worked";
 the failure transitions say each fix worked and the next wall is now visible. This is the README's
