@@ -128,6 +128,7 @@ def grade(source, level):
             err = f"raised {type(e).__name__}: {e}"
             hint = shape_hint(err, args, level) if SHAPE_HINT else ""
             hint = hint or (reshape_hint(err, args, level) if RESHAPE_HINT else "")
+            hint = hint or (copy_hint(err, args, level) if COPY_HINT else "")
             failures.append((nkibench.label(case, level), hint or enrich(err)))
             continue
         parts["runs"] = True
@@ -268,6 +269,7 @@ _INVENTED = re.compile(r"has no attribute|is not callable|unexpected keyword arg
 
 SHAPE_HINT = False
 RESHAPE_HINT = False
+COPY_HINT = False
 
 
 # --reshape-hint. Measured in exp3: level 3 ended on `cannot reshape array of size 32768 into shape
@@ -299,6 +301,37 @@ def reshape_hint(err, args, level):
             f"`psum = nl.ndarray({shape}, dtype=nl.float32, buffer=nl.psum)`. Use index [1] on both "
             f"inputs: `{mn}.shape[0]` is {ma.shape[0]}, the contraction length, not the {N} you "
             f"need. Give the output tile and the shared_hbm output the same {shape} shape.")
+
+
+# --copy-hint. Exp 5: with the matmul destination fixed, level 3 stopped on `value array of shape
+# (32768,) could not be broadcast to indexing result of shape (65536,)` four rounds running. The
+# kernel reused the (128, 512) INPUT tile rhs_tile as the destination of tensor_copy from a (64, 512)
+# PSUM result. enrich() answers about slices, which is not what is wrong. Say that the destination
+# tile is bigger than the data, and that the result needs a tile of its own.
+
+def copy_hint(err, args, level):
+    """Instruction for a destination tile larger than the data copied into it, or '' to fall back."""
+    m = re.search(r"value array of shape \((\d+),?\) could not be broadcast to indexing result of "
+                  r"shape \((\d+),?\)", err)
+    if not m:
+        return ""
+    src_n, dst_n = int(m.group(1)), int(m.group(2))
+    if dst_n <= src_n:
+        return ""
+    import inspect
+    names = list(inspect.signature(nkibench.LEVELS[level]["ref"]).parameters)
+    mats = [(n, x) for n, x in zip(names, args) if isinstance(x, np.ndarray) and x.ndim == 2]
+    if len(mats) < 2 or mats[0][1].shape[1] * mats[1][1].shape[1] != src_n:
+        return ""
+    (sn, _), (mn, _) = mats[0], mats[1]
+    shape = f"({sn}.shape[1], {mn}.shape[1])"
+    return (f"{err}. The result holds {src_n} elements but the tile you wrote it into holds {dst_n}: "
+            f"it is bigger than the data. This usually means an INPUT tile was reused for the "
+            f"result. Give the result a tile of its own with exactly the result's shape: "
+            f"`res_tile = nl.ndarray({shape}, dtype={sn}.dtype, buffer=nl.sbuf)`, then "
+            f"`nisa.tensor_copy(dst=res_tile, src=<the psum tile>)`, then "
+            f"`nisa.dma_copy(dst=<the shared_hbm output>, src=res_tile)`. Do not copy into "
+            f"`{mn}`'s tile.")
 
 
 def shape_hint(err, args, level):
@@ -769,7 +802,8 @@ def solve(a, level, log, run=0):
                                   context=a.context, terse=a.terse, api_card=a.api_card,
                                   ap_example=a.ap_example, repair_card=a.repair_card,
                                   shape_hint=a.shape_hint,
-                                  reshape_hint=a.reshape_hint)) + "\n")
+                                  reshape_hint=a.reshape_hint,
+                                  copy_hint=a.copy_hint)) + "\n")
         log.flush()
         return reward, rounds
 
@@ -912,10 +946,14 @@ def main():
     ap.add_argument("--reshape-hint", action="store_true",
                     help="EXPERIMENT. On a 'cannot reshape' error from nc_matmul, name the real "
                          "cause (wrong destination tile shape) and give the (M, N) shape to use.")
+    ap.add_argument("--copy-hint", action="store_true",
+                    help="EXPERIMENT. When a result is copied into a tile bigger than the data, "
+                         "say an input tile was reused and give the result a tile of its own.")
     a = ap.parse_args()
-    global SHAPE_HINT, RESHAPE_HINT
+    global SHAPE_HINT, RESHAPE_HINT, COPY_HINT
     SHAPE_HINT = a.shape_hint
     RESHAPE_HINT = a.reshape_hint
+    COPY_HINT = a.copy_hint
 
     if not a.offline:
         # Validate before the first request. An empty or scheme-less value produces a hostname
