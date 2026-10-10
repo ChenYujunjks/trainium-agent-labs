@@ -127,6 +127,7 @@ def grade(source, level):
         except Exception as e:
             err = f"raised {type(e).__name__}: {e}"
             hint = shape_hint(err, args, level) if SHAPE_HINT else ""
+            hint = hint or (reshape_hint(err, args, level) if RESHAPE_HINT else "")
             failures.append((nkibench.label(case, level), hint or enrich(err)))
             continue
         parts["runs"] = True
@@ -266,6 +267,31 @@ _INVENTED = re.compile(r"has no attribute|is not callable|unexpected keyword arg
 # name the tensor, its shape, and the one change: give it its own tile of its own shape.
 
 SHAPE_HINT = False
+RESHAPE_HINT = False
+
+
+# --reshape-hint. Measured in exp3: level 3 ended on `cannot reshape array of size 32768 into shape
+# (1,64)` four rounds running, and the model resent the same kernel each time. The kernel has no
+# reshape. The error is raised inside nc_matmul: the model allocated the PSUM destination as (1, 64),
+# 64 elements, and the product of lhsT (K, M) and rhs (K, N) is M x N. enrich() answers "do not
+# reshape", which blames something the model never wrote. Name the real cause and the real shape.
+
+def reshape_hint(err, args, level):
+    """A matmul-destination instruction for a 'cannot reshape' error, or '' to fall back."""
+    m = re.search(r"cannot reshape array of size (\d+) into shape \((\d+),\s*(\d+)\)", err)
+    if not m:
+        return ""
+    size, r, c = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    mats = [x for x in args if isinstance(x, np.ndarray) and x.ndim == 2]
+    if len(mats) < 2 or mats[0].shape[1] * mats[1].shape[1] != size:
+        return ""
+    M, N = mats[0].shape[1], mats[1].shape[1]
+    return (f"{err}. This is raised inside nisa.nc_matmul, not by a reshape in your code: the "
+            f"destination tile `dst` you passed has shape ({r}, {c}) and holds {r * c} elements, "
+            f"but this matmul produces {size} elements. The product is (columns of stationary) x "
+            f"(columns of moving) = ({M}, {N}). Allocate the PSUM destination with exactly that "
+            f"shape: `psum = nl.ndarray(({M}, {N}), dtype=nl.float32, buffer=nl.psum)`, and give "
+            f"the SBUF copy and the shared_hbm output the same ({M}, {N}) shape.")
 
 
 def shape_hint(err, args, level):
@@ -735,7 +761,8 @@ def solve(a, level, log, run=0):
                                   stopped=why, model=a.model, samples=a.samples,
                                   context=a.context, terse=a.terse, api_card=a.api_card,
                                   ap_example=a.ap_example, repair_card=a.repair_card,
-                                  shape_hint=a.shape_hint)) + "\n")
+                                  shape_hint=a.shape_hint,
+                                  reshape_hint=a.reshape_hint)) + "\n")
         log.flush()
         return reward, rounds
 
@@ -875,9 +902,13 @@ def main():
     ap.add_argument("--shape-hint", action="store_true",
                     help="EXPERIMENT. On a dma_copy size mismatch, name the input tensor whose size "
                          "matches and tell the model to give it its own tile of its own shape.")
+    ap.add_argument("--reshape-hint", action="store_true",
+                    help="EXPERIMENT. On a 'cannot reshape' error from nc_matmul, name the real "
+                         "cause (wrong destination tile shape) and give the (M, N) shape to use.")
     a = ap.parse_args()
-    global SHAPE_HINT
+    global SHAPE_HINT, RESHAPE_HINT
     SHAPE_HINT = a.shape_hint
+    RESHAPE_HINT = a.reshape_hint
 
     if not a.offline:
         # Validate before the first request. An empty or scheme-less value produces a hostname
